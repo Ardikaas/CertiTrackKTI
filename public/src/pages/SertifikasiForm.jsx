@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UploadCloud, Send } from 'lucide-react';
+import { UploadCloud, Send, FileText, Image as ImageIcon } from 'lucide-react';
 
 const SertifikasiForm = () => {
     const [formData, setFormData] = useState({
@@ -99,13 +99,25 @@ const SertifikasiForm = () => {
                             </div>
                         </div>
 
-                        <div className="lg:col-span-2 flex flex-col h-full">
-                            <label className="text-sm font-semibold text-slate-900 mb-2">Foto Equipment</label>
-                            <div className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-xl bg-slate-50 cursor-pointer hover:border-primary hover:bg-blue-50/50 transition-all relative min-h-[250px] text-center p-8">
-                                <UploadCloud size={48} className="text-primary mb-4" />
-                                <h4 className="text-base font-semibold text-slate-900 mb-2">Klik atau Drag & Drop foto di sini</h4>
-                                <p className="text-sm text-slate-500">Format JPG, PNG (Max. 5MB)</p>
-                                <input type="file" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept="image/*" />
+                        <div className="lg:col-span-2 flex flex-col gap-6 h-full">
+                            <div className="flex flex-col flex-1">
+                                <label className="text-sm font-semibold text-slate-900 mb-2">Foto Equipment</label>
+                                <div className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-xl bg-slate-50 cursor-pointer hover:border-primary hover:bg-blue-50/50 transition-all relative min-h-[160px] text-center p-4">
+                                    <ImageIcon size={32} className="text-primary mb-2" />
+                                    <h4 className="text-sm font-semibold text-slate-900 mb-1">Klik atau Drag & Drop foto di sini</h4>
+                                    <p className="text-xs text-slate-500">Format JPG, PNG (Max. 5MB)</p>
+                                    <input type="file" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept="image/*" name="fotoEquipment" />
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col flex-1">
+                                <label className="text-sm font-semibold text-slate-900 mb-2">Dokumen Sertifikat</label>
+                                <div className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-xl bg-slate-50 cursor-pointer hover:border-primary hover:bg-blue-50/50 transition-all relative min-h-[160px] text-center p-4">
+                                    <FileText size={32} className="text-primary mb-2" />
+                                    <h4 className="text-sm font-semibold text-slate-900 mb-1">Klik atau Drag & Drop PDF di sini</h4>
+                                    <p className="text-xs text-slate-500">Format PDF (Max. 5MB)</p>
+                                    <input type="file" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept=".pdf" name="dokumenSertifikat" />
+                                </div>
                             </div>
                         </div>
 
