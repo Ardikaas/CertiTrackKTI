@@ -1,0 +1,12 @@
+{
+  "watch": ["src"],
+  "ext": "js,json",
+  "ignore": [
+    "**/auth_info_baileys/**",
+    "**/auth_info_baileys",
+    "**/uploads/**",
+    "**/node_modules/**",
+    "nodemon.json"
+  ],
+  "delay": "2000"
+}

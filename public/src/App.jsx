@@ -1,9 +1,15 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import Sidebar from './components/Sidebar';
-import Dashboard from './pages/Dashboard';
-import SertifikasiForm from './pages/SertifikasiForm';
-import DataSertifikasi from './pages/DataSertifikasi';
+import React from "react";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
+import Sidebar from "./components/Sidebar";
+import Dashboard from "./pages/Dashboard";
+import SertifikasiForm from "./pages/SertifikasiForm";
+import DataSertifikasi from "./pages/DataSertifikasi";
+import WhatsApp from "./pages/WhatsApp";
 
 function App() {
   return (
@@ -16,6 +22,7 @@ function App() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/sertifikasi/baru" element={<SertifikasiForm />} />
             <Route path="/sertifikasi/data" element={<DataSertifikasi />} />
+            <Route path="/whatsapp" element={<WhatsApp />} />
           </Routes>
         </main>
       </div>

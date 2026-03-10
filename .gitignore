@@ -125,3 +125,12 @@ ehthumbs_vista.db
 .vscode/
 *.swp
 *.swo
+
+# WhatsApp Baileys auth session
+auth_info_baileys/
+
+# Uploaded files
+uploads/
+
+# Local data storage
+data/
