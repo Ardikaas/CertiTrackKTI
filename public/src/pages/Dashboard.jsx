@@ -15,7 +15,7 @@ const Dashboard = () => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [filterType, setFilterType] = useState("tahun");
 
   useEffect(() => {
     const fetchData = async () => {
@@ -55,41 +55,98 @@ const Dashboard = () => {
     .filter((d) => d.status === "expired" || d.status === "expiring_soon")
     .sort((a, b) => a.sisaHari - b.sisaHari);
 
-  // Compute Trend Data for the selected year
-  const months = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-  ];
-  const trendData = months.map((m) => ({ month: m, activated: 0, expired: 0 }));
-
-  let newCertThisMonth = 0;
-  const currentMonth = new Date().getMonth();
+  // Compute Trend Data
   const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth();
+  const getWeekStart = (date) => {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    return new Date(d.setDate(diff)).setHours(0, 0, 0, 0);
+  };
+  const currentWeekStart = getWeekStart(new Date());
+
+  let trendData = [];
+  if (filterType === "minggu") {
+    trendData = [
+      { label: "Sen", activated: 0, expired: 0 },
+      { label: "Sel", activated: 0, expired: 0 },
+      { label: "Rab", activated: 0, expired: 0 },
+      { label: "Kam", activated: 0, expired: 0 },
+      { label: "Jum", activated: 0, expired: 0 },
+      { label: "Sab", activated: 0, expired: 0 },
+      { label: "Min", activated: 0, expired: 0 },
+    ];
+  } else if (filterType === "bulan") {
+    trendData = [
+      { label: "Mg 1", activated: 0, expired: 0 },
+      { label: "Mg 2", activated: 0, expired: 0 },
+      { label: "Mg 3", activated: 0, expired: 0 },
+      { label: "Mg 4", activated: 0, expired: 0 },
+      { label: "Mg 5", activated: 0, expired: 0 },
+    ];
+  } else {
+    const months = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "Mei",
+      "Jun",
+      "Jul",
+      "Ags",
+      "Sep",
+      "Okt",
+      "Nov",
+      "Des",
+    ];
+    trendData = months.map((m) => ({ label: m, activated: 0, expired: 0 }));
+  }
+
+  let newCertThisPeriod = 0;
 
   data.forEach((item) => {
+    // Process Aktivasi
     if (item.tanggalTerbit) {
       const d = new Date(item.tanggalTerbit);
-      if (d.getFullYear() === selectedYear) {
+      if (filterType === "tahun" && d.getFullYear() === currentYear) {
         trendData[d.getMonth()].activated++;
-      }
-      if (d.getFullYear() === currentYear && d.getMonth() === currentMonth) {
-        newCertThisMonth++;
+        newCertThisPeriod++;
+      } else if (
+        filterType === "bulan" &&
+        d.getFullYear() === currentYear &&
+        d.getMonth() === currentMonth
+      ) {
+        const weekIndex = Math.min(Math.floor((d.getDate() - 1) / 7), 4);
+        trendData[weekIndex].activated++;
+        newCertThisPeriod++;
+      } else if (
+        filterType === "minggu" &&
+        getWeekStart(d) === currentWeekStart
+      ) {
+        const dayIndex = d.getDay() === 0 ? 6 : d.getDay() - 1;
+        trendData[dayIndex].activated++;
+        newCertThisPeriod++;
       }
     }
+    // Process Expired
     if (item.tanggalExp) {
       const d = new Date(item.tanggalExp);
-      if (d.getFullYear() === selectedYear) {
+      if (filterType === "tahun" && d.getFullYear() === currentYear) {
         trendData[d.getMonth()].expired++;
+      } else if (
+        filterType === "bulan" &&
+        d.getFullYear() === currentYear &&
+        d.getMonth() === currentMonth
+      ) {
+        const weekIndex = Math.min(Math.floor((d.getDate() - 1) / 7), 4);
+        trendData[weekIndex].expired++;
+      } else if (
+        filterType === "minggu" &&
+        getWeekStart(d) === currentWeekStart
+      ) {
+        const dayIndex = d.getDay() === 0 ? 6 : d.getDay() - 1;
+        trendData[dayIndex].expired++;
       }
     }
   });
@@ -99,17 +156,12 @@ const Dashboard = () => {
     ...trendData.map((t) => Math.max(t.activated, t.expired)),
   );
 
-  // Ambil tahun-tahun unik dari data untuk dropdown
-  const availableYears = [
-    ...new Set(
-      data.map((d) => new Date(d.tanggalTerbit || d.createdAt).getFullYear()),
-    ),
-  ]
-    .filter((y) => !isNaN(y))
-    .sort((a, b) => b - a);
-  if (!availableYears.includes(new Date().getFullYear())) {
-    availableYears.unshift(new Date().getFullYear());
-  }
+  const periodLabel =
+    filterType === "tahun"
+      ? "Tahun Ini"
+      : filterType === "bulan"
+        ? "Bulan Ini"
+        : "Minggu Ini";
 
   const formatDate = (dateStr) => {
     if (!dateStr) return "-";
@@ -373,15 +425,13 @@ const Dashboard = () => {
                 Trend Aktivasi vs Expired
               </h3>
               <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
                 className="form-select text-xs py-1.5 pl-3 pr-8 border border-slate-200 rounded-lg bg-white shadow-sm text-slate-600 font-bold focus:ring-[3px] focus:ring-primary/10 focus:border-primary outline-none cursor-pointer"
               >
-                {availableYears.map((year) => (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
-                ))}
+                <option value="tahun">Tahun Ini</option>
+                <option value="bulan">Bulan Ini</option>
+                <option value="minggu">Minggu Ini</option>
               </select>
             </div>
 
@@ -419,7 +469,7 @@ const Dashboard = () => {
                         style={{ height: `${Math.max(2, activatedHeight)}%` }}
                       >
                         <div className="hidden group-hover/bar:block absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] font-bold py-1 px-2 rounded shadow-lg z-20 whitespace-nowrap">
-                          {d.month}: {d.activated} Baru
+                          {d.label}: {d.activated} Baru
                         </div>
                       </div>
 
@@ -429,7 +479,7 @@ const Dashboard = () => {
                         style={{ height: `${Math.max(2, expiredHeight)}%` }}
                       >
                         <div className="hidden group-hover/bar:block absolute -top-8 left-1/2 -translate-x-1/2 bg-rose-900 text-white text-[10px] font-bold py-1 px-2 rounded shadow-lg z-20 whitespace-nowrap">
-                          {d.month}: {d.expired} Exp
+                          {d.label}: {d.expired} Exp
                         </div>
                       </div>
                     </div>
@@ -441,7 +491,7 @@ const Dashboard = () => {
             <div className="flex justify-between text-[10px] sm:text-[11px] font-bold text-slate-400 mt-2 px-1 pb-2">
               {trendData.map((d, idx) => (
                 <span key={idx} className="flex-1 text-center truncate">
-                  {d.month}
+                  {d.label}
                 </span>
               ))}
             </div>
@@ -454,10 +504,10 @@ const Dashboard = () => {
                   </p>
                   <div className="flex items-center gap-2 mt-1">
                     <p className="text-3xl font-extrabold text-slate-800 tracking-tight">
-                      +{newCertThisMonth}
+                      +{newCertThisPeriod}
                     </p>
                     <span className="text-xs font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-md">
-                      Bulan Ini
+                      {periodLabel}
                     </span>
                   </div>
                 </div>
