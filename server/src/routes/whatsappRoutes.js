@@ -21,6 +21,19 @@ router.get(
   }),
 );
 
+// POST /api/v1/whatsapp/init
+router.post(
+  "/init",
+  catchAsync(async (req, res) => {
+    const { initWhatsApp } = require("../services/whatsapp");
+    initWhatsApp();
+    res.status(200).json({
+      status: "success",
+      data: { message: "WhatsApp initialization started" },
+    });
+  }),
+);
+
 // GET /api/v1/whatsapp/qr
 router.get(
   "/qr",

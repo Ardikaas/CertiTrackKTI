@@ -11,88 +11,136 @@ import {
 
 const Sidebar = () => {
   return (
-    <aside className="w-64 bg-white border-r border-slate-200 flex flex-col p-6 h-screen sticky top-0">
-      <div className="flex items-center gap-3 mb-8 px-2">
-        <div className="w-9 h-9 text-white rounded-md flex items-center justify-center font-bold text-lg tracking-tight">
-          <img src="krakatau.png" alt="Krakatau Logo" />
+    <aside className="w-72 bg-white border-r border-slate-200/80 flex flex-col p-6 h-screen sticky top-0 shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-30">
+      <div className="flex items-center gap-3.5 mb-10 px-2 mt-2">
+        <div className="w-9 h-9 text-white rounded-md flex items-center justify-center font-bold text-lg tracking-tight shrink-0">
+          <img src="/krakatau.png" alt="Krakatau Logo" />
         </div>
-        <span className="font-bold text-xl text-slate-900 tracking-tight">
+        <span className="font-extrabold text-2xl text-slate-900 tracking-tight">
           CertiTrack
         </span>
       </div>
 
-      <nav className="flex flex-col gap-6">
-        <div className="flex flex-col gap-1">
-          <h3 className="text-xs uppercase tracking-wider text-slate-500 font-semibold px-3 pb-2">
+      <nav className="flex flex-col gap-8 flex-1 overflow-y-auto custom-scrollbar pr-2">
+        <div className="flex flex-col gap-1.5">
+          <h3 className="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest px-4 pb-2">
             Main
           </h3>
           <NavLink
             to="/dashboard"
             className={({ isActive }) =>
-              `flex items-center gap-3 p-3 rounded-md font-semibold text-sm transition-colors ${isActive ? "bg-blue-50 text-primary" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"}`
+              `flex items-center gap-3.5 px-4 py-3.5 rounded-2xl font-bold text-sm transition-all group ${
+                isActive
+                  ? "bg-blue-50 text-primary shadow-sm border border-blue-100/50"
+                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-800 border border-transparent"
+              }`
             }
           >
-            <LayoutDashboard size={20} />
-            <span>Dashboard</span>
+            {({ isActive }) => (
+              <>
+                <LayoutDashboard
+                  size={20}
+                  strokeWidth={isActive ? 2.5 : 2}
+                  className={`transition-colors ${isActive ? "text-primary" : "text-slate-400 group-hover:text-slate-600"}`}
+                />
+                <span>Dashboard</span>
+              </>
+            )}
           </NavLink>
         </div>
 
-        <div className="flex flex-col gap-1">
-          <h3 className="text-xs uppercase tracking-wider text-slate-500 font-semibold px-3 pb-2">
+        <div className="flex flex-col gap-1.5">
+          <h3 className="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest px-4 pb-2">
             Sertifikasi
           </h3>
           <NavLink
             to="/sertifikasi/baru"
             className={({ isActive }) =>
-              `flex items-center gap-3 p-3 rounded-md font-semibold text-sm transition-colors ${isActive ? "bg-blue-50 text-primary" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"}`
+              `flex items-center gap-3.5 px-4 py-3.5 rounded-2xl font-bold text-sm transition-all group ${
+                isActive
+                  ? "bg-blue-50 text-primary shadow-sm border border-blue-100/50"
+                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-800 border border-transparent"
+              }`
             }
           >
-            <FilePlus size={20} />
-            <span>Sertifikasi Baru</span>
+            {({ isActive }) => (
+              <>
+                <FilePlus
+                  size={20}
+                  strokeWidth={isActive ? 2.5 : 2}
+                  className={`transition-colors ${isActive ? "text-primary" : "text-slate-400 group-hover:text-slate-600"}`}
+                />
+                <span>Sertifikasi Baru</span>
+              </>
+            )}
           </NavLink>
           <NavLink
             to="/sertifikasi/data"
             className={({ isActive }) =>
-              `flex items-center gap-3 p-3 rounded-md font-semibold text-sm transition-colors ${isActive ? "bg-blue-50 text-primary" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"}`
+              `flex items-center gap-3.5 px-4 py-3.5 rounded-2xl font-bold text-sm transition-all group ${
+                isActive
+                  ? "bg-blue-50 text-primary shadow-sm border border-blue-100/50"
+                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-800 border border-transparent"
+              }`
             }
           >
-            <FileText size={20} />
-            <span>Data Sertifikasi</span>
+            {({ isActive }) => (
+              <>
+                <FileText
+                  size={20}
+                  strokeWidth={isActive ? 2.5 : 2}
+                  className={`transition-colors ${isActive ? "text-primary" : "text-slate-400 group-hover:text-slate-600"}`}
+                />
+                <span>Data Sertifikasi</span>
+              </>
+            )}
           </NavLink>
         </div>
 
-        <div className="flex flex-col gap-1">
-          <h3 className="text-xs uppercase tracking-wider text-slate-500 font-semibold px-3 pb-2">
+        <div className="flex flex-col gap-1.5">
+          <h3 className="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest px-4 pb-2">
             Komunikasi
           </h3>
           <NavLink
             to="/whatsapp"
             className={({ isActive }) =>
-              `flex items-center gap-3 p-3 rounded-md font-semibold text-sm transition-colors ${isActive ? "bg-emerald-50 text-emerald-700" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"}`
+              `flex items-center gap-3.5 px-4 py-3.5 rounded-2xl font-bold text-sm transition-all group ${
+                isActive
+                  ? "bg-emerald-50 text-emerald-700 shadow-sm border border-emerald-100/50"
+                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-800 border border-transparent"
+              }`
             }
           >
-            <MessageSquare size={20} />
-            <span>WhatsApp</span>
+            {({ isActive }) => (
+              <>
+                <MessageSquare
+                  size={20}
+                  strokeWidth={isActive ? 2.5 : 2}
+                  className={`transition-colors flex-shrink-0 ${isActive ? "text-emerald-600" : "text-slate-400 group-hover:text-slate-600"}`}
+                />
+                <span>Pengaturan WhatsApp</span>
+              </>
+            )}
           </NavLink>
         </div>
       </nav>
 
-      <div className="mt-auto pt-6 border-t border-slate-200">
-        <nav className="flex flex-col gap-1">
-          <a
-            href="#"
-            className="flex items-center gap-3 p-3 rounded-md font-semibold text-sm text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors"
-          >
-            <Settings size={20} />
+      <div className="mt-auto pt-6 border-t border-slate-100 bg-white">
+        <nav className="flex flex-col gap-1.5">
+          <button className="flex items-center gap-3.5 px-4 py-3.5 rounded-2xl font-bold text-sm text-slate-500 hover:bg-slate-50 hover:text-slate-800 transition-all group border border-transparent w-full">
+            <Settings
+              size={20}
+              className="text-slate-400 group-hover:text-slate-600 transition-colors"
+            />
             <span>Settings</span>
-          </a>
-          <a
-            href="#"
-            className="flex items-center gap-3 p-3 rounded-md font-semibold text-sm text-red-500 hover:bg-red-50 transition-colors"
-          >
-            <LogOut size={20} />
+          </button>
+          <button className="flex items-center gap-3.5 px-4 py-3.5 rounded-2xl font-bold text-sm text-rose-500 hover:bg-rose-50 hover:text-rose-700 transition-all border border-transparent w-full group">
+            <LogOut
+              size={20}
+              className="text-rose-400 group-hover:text-rose-600 transition-colors"
+            />
             <span>Logout</span>
-          </a>
+          </button>
         </nav>
       </div>
     </aside>
