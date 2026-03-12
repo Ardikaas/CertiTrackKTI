@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { apiFetch } from "../utils/api";
 import {
   Search,
   Eye,
@@ -14,8 +15,6 @@ import {
   Plus,
   Clock,
 } from "lucide-react";
-
-const API_BASE = "http://localhost:5000/api/v1";
 
 const DataSertifikasi = () => {
   const [data, setData] = useState([]);
@@ -33,11 +32,19 @@ const DataSertifikasi = () => {
   const [dokumenFile, setDokumenFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [editResult, setEditResult] = useState(null);
+  const [categories, setCategories] = useState([]);
+
+  useEffect(() => {
+    apiFetch("/categories")
+      .then((r) => r.json())
+      .then((d) => { if (d.status === "success") setCategories(d.data); })
+      .catch(() => {});
+  }, []);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/sertifikasi`);
+      const res = await apiFetch("/sertifikasi");
       const result = await res.json();
       if (result.status === "success") {
         const enrichedData = result.data.map((d) => ({
@@ -65,7 +72,7 @@ const DataSertifikasi = () => {
   const handleDelete = async (id) => {
     if (!window.confirm("Yakin ingin menghapus sertifikasi ini?")) return;
     try {
-      const res = await fetch(`${API_BASE}/sertifikasi/${id}`, {
+      const res = await apiFetch(`/sertifikasi/${id}`, {
         method: "DELETE",
       });
       const result = await res.json();
@@ -116,7 +123,7 @@ const DataSertifikasi = () => {
       if (fotoFile) fd.append("fotoEquipment", fotoFile);
       if (dokumenFile) fd.append("dokumenSertifikat", dokumenFile);
 
-      const res = await fetch(`${API_BASE}/sertifikasi/${selectedItem._id}`, {
+      const res = await apiFetch(`/sertifikasi/${selectedItem._id}`, {
         method: "PUT",
         body: fd,
       });
@@ -216,10 +223,10 @@ const DataSertifikasi = () => {
             Aktif
           </button>
           <button className="px-5 py-2 rounded-full bg-white text-slate-600 text-xs font-bold border border-slate-300 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-200 transition-all shadow-sm">
-            Akan Expired
+            Mendekati Kedaluwarsa
           </button>
           <button className="px-5 py-2 rounded-full bg-white text-slate-600 text-xs font-bold border border-slate-300 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 transition-all shadow-sm">
-            Expired
+            Kedaluwarsa
           </button>
         </div>
 
@@ -262,7 +269,7 @@ const DataSertifikasi = () => {
                       Tgl Terbit
                     </th>
                     <th className="px-6 py-5 text-[11px] font-extrabold text-slate-500 uppercase tracking-widest">
-                      Tgl Expired
+                      Tgl Kedaluwarsa
                     </th>
                     <th className="px-6 py-5 text-[11px] font-extrabold text-slate-500 uppercase tracking-widest text-center">
                       Status
@@ -314,12 +321,12 @@ const DataSertifikasi = () => {
                         {item.status === "expired" ? (
                           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white text-rose-700 border border-rose-200 shadow-sm">
                             <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>{" "}
-                            Expired
+                            Kedaluwarsa
                           </span>
                         ) : item.status === "expiring_soon" ? (
                           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white text-amber-700 border border-amber-200 shadow-sm">
                             <Clock size={12} className="text-amber-500" /> Sisa{" "}
-                            {item.sisaHari} hr
+                            {item.sisaHari} hari
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white text-emerald-700 border border-emerald-200 shadow-sm">
@@ -340,7 +347,7 @@ const DataSertifikasi = () => {
                           <button
                             onClick={() => handleEditClick(item)}
                             className="h-8 w-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-amber-600 hover:bg-amber-50 border border-transparent hover:border-amber-100 shadow-sm transition-all"
-                            title="Edit"
+                            title="Ubah Data"
                           >
                             <Edit2 size={16} />
                           </button>
@@ -424,7 +431,7 @@ const DataSertifikasi = () => {
               <div className="mb-8">
                 {selectedItem.status === "expired" ? (
                   <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl font-bold bg-rose-50 text-rose-700 border border-rose-200 shadow-sm">
-                    <AlertTriangle size={18} /> Status: Expired
+                    <AlertTriangle size={18} /> Status: Kedaluwarsa
                   </div>
                 ) : selectedItem.status === "expiring_soon" ? (
                   <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl font-bold bg-amber-50 text-amber-700 border border-amber-200 shadow-sm">
@@ -585,7 +592,7 @@ const DataSertifikasi = () => {
                 <span className="material-symbols-outlined text-primary bg-blue-100 p-1.5 rounded-lg border border-blue-200 shadow-sm text-[20px]">
                   edit_document
                 </span>
-                Edit Sertifikasi Peralatan
+                Ubah Data Sertifikasi Peralatan
               </h3>
               <button
                 onClick={() => setEditModal(false)}
@@ -651,25 +658,9 @@ const DataSertifikasi = () => {
                       className="w-full appearance-none px-4 py-3 pr-10 border border-slate-200 rounded-xl bg-slate-50 text-slate-900 focus:outline-none focus:bg-white focus:border-primary focus:ring-[3px] focus:ring-primary/10 transition-all font-semibold cursor-pointer hover:border-slate-300 shadow-sm"
                     >
                       <option value="">Pilih jenis...</option>
-                      <option value="Sertifikasi Instalasi Listrik">
-                        Sertifikasi Instalasi Listrik
-                      </option>
-                      <option value="Sertifikasi Instalasi Penyalur Petir">
-                        Sertifikasi Instalasi Penyalur Petir
-                      </option>
-                      <option value="Sertifikasi Pesawat Tenaga Produksi">
-                        Sertifikasi Pesawat Tenaga Produksi
-                      </option>
-                      <option value="Sertifikasi Pesawat Angkat Angkut">
-                        Sertifikasi Pesawat Angkat Angkut
-                      </option>
-                      <option value="Sertifikasi Lift">Sertifikasi Lift</option>
-                      <option value="Sertifikasi Bejana Tekan">
-                        Sertifikasi Bejana Tekan
-                      </option>
-                      <option value="Sertifikasi Pemadam Kebakaran">
-                        Sertifikasi Pemadam Kebakaran
-                      </option>
+                      {categories.map((cat) => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
                     </select>
                     <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none group-focus-within:text-primary transition-colors">
                       expand_more
@@ -722,7 +713,7 @@ const DataSertifikasi = () => {
 
                 <div className="group">
                   <label className="block text-sm font-bold text-slate-700 transition-colors mb-2">
-                    Tanggal Expired
+                    Tanggal Kedaluwarsa
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none transition-colors">
@@ -747,7 +738,7 @@ const DataSertifikasi = () => {
                     <span className="material-symbols-outlined text-[20px] text-primary">
                       attachment
                     </span>{" "}
-                    Update File Lampiran{" "}
+                    Perbarui File Lampiran{" "}
                     <span className="text-[11px] text-slate-400 font-semibold ml-1 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
                       Opsional
                     </span>
@@ -773,7 +764,7 @@ const DataSertifikasi = () => {
                             {fotoFile
                               ? fotoFile.name
                               : selectedItem.fotoEquipment
-                                ? "Ganti foto saat ini..."
+                                ? "Ubah foto saat ini..."
                                 : "Pilih file gambar baru..."}
                           </span>
                         </div>
@@ -800,7 +791,7 @@ const DataSertifikasi = () => {
                             {dokumenFile
                               ? dokumenFile.name
                               : selectedItem.dokumenSertifikat
-                                ? "Ganti dokumen PDF..."
+                                ? "Ubah dokumen PDF..."
                                 : "Pilih file PDF..."}
                           </span>
                         </div>

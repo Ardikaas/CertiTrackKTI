@@ -90,11 +90,15 @@ router.get(
   "/",
   catchAsync(async (req, res) => {
     const data = readData().map(enrichRecord);
-    data.sort((a, b) => new Date(a.tanggalExp) - new Date(b.tanggalExp));
+    
+    // Filter by user ID
+    const userSertifikasi = data.filter((d) => d.userId === req.user.id);
+    
+    userSertifikasi.sort((a, b) => new Date(a.tanggalExp) - new Date(b.tanggalExp));
     res.status(200).json({
       status: "success",
-      results: data.length,
-      data,
+      results: userSertifikasi.length,
+      data: userSertifikasi,
     });
   }),
 );
@@ -109,6 +113,7 @@ router.post(
 
     // Generate unique ID
     body._id = crypto.randomUUID();
+    body.userId = req.user.id; // Assign to current user
     body.createdAt = new Date().toISOString();
     body.updatedAt = new Date().toISOString();
 
@@ -134,7 +139,7 @@ router.get(
   "/:id",
   catchAsync(async (req, res, next) => {
     const data = readData();
-    const record = data.find((d) => d._id === req.params.id);
+    const record = data.find((d) => d._id === req.params.id && d.userId === req.user.id);
     if (!record) {
       return next(new AppError("Sertifikasi tidak ditemukan", 404));
     }
@@ -151,9 +156,9 @@ router.put(
   uploadFields,
   catchAsync(async (req, res, next) => {
     const data = readData();
-    const index = data.findIndex((d) => d._id === req.params.id);
+    const index = data.findIndex((d) => d._id === req.params.id && d.userId === req.user.id);
     if (index === -1) {
-      return next(new AppError("Sertifikasi tidak ditemukan", 404));
+      return next(new AppError("Sertifikasi tidak ditemukan atau tidak memiliki akses", 404));
     }
 
     const body = { ...req.body };
@@ -181,9 +186,9 @@ router.delete(
   "/:id",
   catchAsync(async (req, res, next) => {
     const data = readData();
-    const index = data.findIndex((d) => d._id === req.params.id);
+    const index = data.findIndex((d) => d._id === req.params.id && d.userId === req.user.id);
     if (index === -1) {
-      return next(new AppError("Sertifikasi tidak ditemukan", 404));
+      return next(new AppError("Sertifikasi tidak ditemukan atau tidak memiliki akses", 404));
     }
 
     const record = data[index];

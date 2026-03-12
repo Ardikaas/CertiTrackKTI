@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { apiFetch } from "../utils/api";
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
@@ -9,8 +10,6 @@ import {
   ShieldAlert,
 } from "lucide-react";
 
-const API_BASE = "http://localhost:5000/api/v1";
-
 const Dashboard = () => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -20,7 +19,7 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await fetch(`${API_BASE}/sertifikasi`);
+        const res = await apiFetch("/sertifikasi");
         const result = await res.json();
         if (result.status === "success") {
           const enrichedData = result.data.map((d) => ({
@@ -178,7 +177,7 @@ const Dashboard = () => {
       <header className="flex items-center justify-between border-b border-slate-200/80 px-8 py-4 bg-white/80 backdrop-blur-xl sticky top-0 z-20 shadow-sm">
         <div className="flex items-center gap-4">
           <h2 className="text-xl font-extrabold tracking-tight text-slate-900">
-            Overview
+            Ringkasan
           </h2>
         </div>
         <div className="flex items-center gap-6">
@@ -190,7 +189,7 @@ const Dashboard = () => {
             </div>
             <input
               className="block w-full pl-11 pr-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50/80 text-sm placeholder-slate-400 focus:bg-white focus:ring-[3px] focus:ring-primary/10 focus:border-primary outline-none transition-all hover:border-slate-300 shadow-sm"
-              placeholder="Search equipment, certifications..."
+              placeholder="Cari peralatan, sertifikasi..."
               type="text"
             />
           </div>
@@ -277,7 +276,7 @@ const Dashboard = () => {
               </span>
             </div>
             <h3 className="text-slate-500 text-sm font-semibold relative z-10">
-              Akan Berakhir (30h)
+              Mendekati Kedaluwarsa (30h)
             </h3>
             <p className="text-3xl font-extrabold text-amber-600 mt-1 relative z-10 tracking-tight">
               {loading ? "..." : expiringSoon}
@@ -299,7 +298,7 @@ const Dashboard = () => {
               </span>
             </div>
             <h3 className="text-slate-500 text-sm font-semibold relative z-10">
-              Sudah Expired
+              Telah Kedaluwarsa
             </h3>
             <p className="text-3xl font-extrabold text-rose-600 mt-1 relative z-10 tracking-tight">
               {loading ? "..." : expired}
@@ -329,11 +328,10 @@ const Dashboard = () => {
                     <CheckCircle size={40} />
                   </div>
                   <p className="text-xl font-bold text-slate-800 mb-2">
-                    Semua Sertifikasi Aman
+                    Sertifikasi Terkendali
                   </p>
                   <p className="text-sm text-slate-500">
-                    Tidak ada peralatan yang expired atau mendekati masa
-                    tenggang.
+                    Tidak ada sertifikasi peralatan yang kedaluwarsa atau mendekati masa tenggang.
                   </p>
                 </div>
               ) : (
@@ -342,7 +340,7 @@ const Dashboard = () => {
                     <tr className="bg-slate-50 text-slate-500 text-[11px] uppercase tracking-widest font-bold border-b border-slate-100">
                       <th className="px-6 py-4">Nama Peralatan</th>
                       <th className="px-6 py-4">Sertifikasi</th>
-                      <th className="px-6 py-4">Tgl Expired</th>
+                      <th className="px-6 py-4">Tgl Kedaluwarsa</th>
                       <th className="px-6 py-4">Status</th>
                       <th className="px-6 py-4 text-right">Aksi</th>
                     </tr>
@@ -397,8 +395,8 @@ const Dashboard = () => {
                               className={`w-1.5 h-1.5 rounded-full ${item.status === "expired" ? "bg-rose-500 animate-pulse" : "bg-amber-500"}`}
                             ></span>
                             {item.status === "expired"
-                              ? "Expired"
-                              : "Expiring Soon"}
+                              ? "Kedaluwarsa"
+                              : "Mendekati Kedaluwarsa"}
                           </span>
                         </td>
                         <td className="px-6 py-4 text-right">
@@ -422,7 +420,7 @@ const Dashboard = () => {
             <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-primary/5 to-transparent rounded-bl-full -z-0"></div>
             <div className="flex items-center justify-between mb-2 relative z-10">
               <h3 className="text-lg font-extrabold text-slate-800">
-                Trend Aktivasi vs Expired
+                Tren Aktivasi vs Kedaluwarsa
               </h3>
               <select
                 value={filterType}
@@ -446,7 +444,7 @@ const Dashboard = () => {
               <div className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-sm bg-rose-400 border border-rose-500 shadow-sm"></span>
                 <span className="text-[10px] font-bold text-slate-500 uppercase">
-                  Expired
+                  Kedaluwarsa
                 </span>
               </div>
             </div>
@@ -479,7 +477,7 @@ const Dashboard = () => {
                         style={{ height: `${Math.max(2, expiredHeight)}%` }}
                       >
                         <div className="hidden group-hover/bar:block absolute -top-8 left-1/2 -translate-x-1/2 bg-rose-900 text-white text-[10px] font-bold py-1 px-2 rounded shadow-lg z-20 whitespace-nowrap">
-                          {d.label}: {d.expired} Exp
+                          {d.label}: {d.expired} Kedaluwarsa
                         </div>
                       </div>
                     </div>

@@ -1,4 +1,5 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
+import { apiFetch } from "../utils/api";
 import {
   Send,
   FileText,
@@ -9,8 +10,6 @@ import {
   UploadCloud,
 } from "lucide-react";
 import { Link } from "react-router-dom";
-
-const API_BASE = "http://localhost:5000/api/v1";
 
 const SertifikasiForm = () => {
   const [formData, setFormData] = useState({
@@ -26,6 +25,14 @@ const SertifikasiForm = () => {
   const [dokumenName, setDokumenName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
+  const [categories, setCategories] = useState([]);
+
+  useEffect(() => {
+    apiFetch("/categories")
+      .then((r) => r.json())
+      .then((d) => { if (d.status === "success") setCategories(d.data); })
+      .catch(() => {});
+  }, []);
 
   const fotoInputRef = useRef(null);
   const dokumenInputRef = useRef(null);
@@ -83,7 +90,7 @@ const SertifikasiForm = () => {
       if (fotoFile) fd.append("fotoEquipment", fotoFile);
       if (dokumenFile) fd.append("dokumenSertifikat", dokumenFile);
 
-      const res = await fetch(`${API_BASE}/sertifikasi`, {
+      const res = await apiFetch("/sertifikasi", {
         method: "POST",
         body: fd,
       });
@@ -127,7 +134,7 @@ const SertifikasiForm = () => {
         {/* Header Section */}
         <div className="flex flex-col gap-2 mb-8">
           <h1 className="text-slate-900 tracking-tight text-3xl font-extrabold leading-tight">
-            Input Sertifikasi Peralatan
+            Formulir Sertifikasi Peralatan
           </h1>
           <p className="text-slate-500 text-sm font-medium leading-normal">
             Masukkan detail untuk menambahkan sertifikasi peralatan baru ke
@@ -175,25 +182,9 @@ const SertifikasiForm = () => {
                       className="appearance-none flex w-full min-w-0 flex-1 rounded-xl text-slate-900 focus:bg-white focus:ring-[3px] focus:ring-primary/10 focus:border-primary border border-slate-200 bg-slate-50 h-12 placeholder:text-slate-400 pl-4 pr-10 text-sm font-medium transition-all outline-none cursor-pointer hover:border-slate-300"
                     >
                       <option value="">Pilih Kategori...</option>
-                      <option value="Sertifikasi Instalasi Listrik">
-                        Instalasi Listrik
-                      </option>
-                      <option value="Sertifikasi Instalasi Penyalur Petir">
-                        Instalasi Penyalur Petir
-                      </option>
-                      <option value="Sertifikasi Pesawat Tenaga Produksi">
-                        Pesawat Tenaga Produksi
-                      </option>
-                      <option value="Sertifikasi Pesawat Angkat Angkut">
-                        Pesawat Angkat Angkut
-                      </option>
-                      <option value="Sertifikasi Lift">Instalasi Lift</option>
-                      <option value="Sertifikasi Bejana Tekan">
-                        Bejana Tekan
-                      </option>
-                      <option value="Sertifikasi Pemadam Kebakaran">
-                        Pemadam Kebakaran
-                      </option>
+                      {categories.map((cat) => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
                     </select>
                     <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none group-focus-within:text-primary transition-colors">
                       expand_more
@@ -241,7 +232,7 @@ const SertifikasiForm = () => {
 
                 <label className="flex flex-col flex-1 group">
                   <span className="text-slate-700 text-sm font-bold leading-normal mb-2 transition-colors">
-                    Tanggal Berakhir
+                    Tanggal Kedaluwarsa
                   </span>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none transition-colors">
@@ -285,7 +276,7 @@ const SertifikasiForm = () => {
                           onClick={removeFoto}
                           className="flex items-center gap-1.5 px-4 py-2 bg-white text-red-600 rounded-lg text-sm font-bold shadow-lg hover:bg-slate-50 transition-colors transform scale-95 group-hover:scale-100"
                         >
-                          <X size={16} /> Ganti Foto
+                          <X size={16} /> Ubah Foto
                         </button>
                       </div>
                       <div className="absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md px-3 py-2 flex items-center justify-between border-t border-slate-100">
@@ -352,7 +343,7 @@ const SertifikasiForm = () => {
                           onClick={removeDokumen}
                           className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 hover:text-red-600 hover:border-red-200 rounded-lg text-xs font-semibold shadow-sm transition-all hover:bg-red-50"
                         >
-                          <X size={14} /> Ganti File
+                          <X size={14} /> Ubah Dokumen
                         </button>
                       </div>
                     </div>

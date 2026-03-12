@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { apiFetch } from "../utils/api";
 import {
   Wifi,
   WifiOff,
@@ -63,9 +64,8 @@ const ToggleLeft = ({ size, className }) => (
   </svg>
 );
 
-const API_BASE = "http://localhost:5000/api/v1";
-const WA_API = `${API_BASE}/whatsapp`;
-const NOTIF_API = `${API_BASE}/notifications`;
+const WA_API = "/whatsapp";
+const NOTIF_API = "/notifications";
 
 const WhatsApp = () => {
   // Connection state
@@ -93,7 +93,7 @@ const WhatsApp = () => {
   // Fetch WhatsApp status
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await fetch(`${WA_API}/status`);
+      const res = await apiFetch(`${WA_API}/status`);
       const data = await res.json();
       setStatus(data.data.connectionStatus);
     } catch {
@@ -104,7 +104,7 @@ const WhatsApp = () => {
   // Fetch QR code
   const fetchQR = useCallback(async () => {
     try {
-      const res = await fetch(`${WA_API}/qr`);
+      const res = await apiFetch(`${WA_API}/qr`);
       const data = await res.json();
       if (data.data.qr) {
         setQrCode(data.data.qr);
@@ -122,7 +122,7 @@ const WhatsApp = () => {
   // Fetch notification settings
   const fetchSettings = useCallback(async () => {
     try {
-      const res = await fetch(`${NOTIF_API}/settings`);
+      const res = await apiFetch(`${NOTIF_API}/settings`);
       const data = await res.json();
       if (data.status === "success" && data.data) setSettings(data.data);
     } catch {
@@ -133,7 +133,7 @@ const WhatsApp = () => {
   // Fetch notification logs
   const fetchLogs = useCallback(async () => {
     try {
-      const res = await fetch(`${NOTIF_API}/log`);
+      const res = await apiFetch(`${NOTIF_API}/log`);
       const data = await res.json();
       if (data.status === "success") setLogs(data.data);
     } catch {
@@ -158,7 +158,7 @@ const WhatsApp = () => {
   const handleLogout = async () => {
     setLoggingOut(true);
     try {
-      await fetch(`${WA_API}/logout`, { method: "POST" });
+      await apiFetch(`${WA_API}/logout`, { method: "POST" });
       setStatus("disconnected");
       setQrCode(null);
     } catch {
@@ -172,7 +172,7 @@ const WhatsApp = () => {
   const handleReconnect = async () => {
     setConnectingService(true);
     try {
-      await fetch(`${WA_API}/init`, { method: "POST" });
+      await apiFetch(`${WA_API}/init`, { method: "POST" });
       setStatus("connecting");
       setQrMessage("Memulai layanan WhatsApp...");
     } catch {
@@ -217,9 +217,8 @@ const WhatsApp = () => {
     setSavingSettings(true);
     setSettingsResult(null);
     try {
-      const res = await fetch(`${NOTIF_API}/settings`, {
+      const res = await apiFetch(`${NOTIF_API}/settings`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(settings),
       });
       const data = await res.json();
@@ -250,9 +249,8 @@ const WhatsApp = () => {
     setTestingNotif(true);
     setTestResult(null);
     try {
-      const res = await fetch(`${NOTIF_API}/test`, {
+      const res = await apiFetch(`${NOTIF_API}/test`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "all" }),
       });
       const data = await res.json();
@@ -329,8 +327,8 @@ const WhatsApp = () => {
     },
     {
       key: "expired",
-      label: "Peringatan Expired",
-      desc: "Peralatan yang sertifikasinya sudah expired",
+      label: "Peringatan Kedaluwarsa",
+      desc: "Peralatan yang sertifikasinya telah kedaluwarsa",
       icon: <CheckCircle2 size={24} className="text-rose-500" />,
       bg: "bg-rose-50",
     },
@@ -755,7 +753,7 @@ const WhatsApp = () => {
                                     className="w-16 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-center text-primary focus:outline-none focus:border-primary focus:ring-[3px] focus:ring-primary/20 transition-all shadow-inner"
                                   />
                                   <span className="text-sm font-bold text-slate-700">
-                                    hari sebelum expired
+                                    hari sebelum kedaluwarsa
                                   </span>
                                 </div>
                               )}
@@ -794,7 +792,7 @@ const WhatsApp = () => {
                   ) : (
                     <PlayCircle size={18} className="text-emerald-500" />
                   )}
-                  Test Notifikasi
+                  Uji Notifikasi
                 </button>
                 <button
                   onClick={saveSettings}
