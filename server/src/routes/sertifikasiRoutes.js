@@ -3,49 +3,16 @@ const router = express.Router();
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
-const crypto = require("crypto");
 const catchAsync = require("../utils/catchAsync");
 const AppError = require("../utils/AppError");
-
-// JSON file storage
-const DATA_DIR = path.join(__dirname, "..", "..", "data");
-const SERTIFIKASI_FILE = path.join(DATA_DIR, "sertifikasi.json");
+const Sertifikasi = require("../models/Sertifikasi");
 
 // Ensure directories
 const uploadsDir = path.join(__dirname, "..", "..", "uploads");
 const fotoDir = path.join(uploadsDir, "foto");
 const dokumenDir = path.join(uploadsDir, "dokumen");
-[DATA_DIR, uploadsDir, fotoDir, dokumenDir].forEach((dir) => {
+[fotoDir, dokumenDir].forEach((dir) => {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-});
-
-// JSON helpers
-const readData = () => {
-  try {
-    if (fs.existsSync(SERTIFIKASI_FILE)) {
-      return JSON.parse(fs.readFileSync(SERTIFIKASI_FILE, "utf8"));
-    }
-  } catch (err) {
-    console.error("Error reading sertifikasi data:", err.message);
-  }
-  return [];
-};
-
-const writeData = (data) => {
-  fs.writeFileSync(SERTIFIKASI_FILE, JSON.stringify(data, null, 2), "utf8");
-};
-
-// Calculate sisaHari (remaining days until expiry)
-const calcSisaHari = (tanggalExp) => {
-  const now = new Date();
-  const exp = new Date(tanggalExp);
-  return Math.ceil((exp - now) / (1000 * 60 * 60 * 24));
-};
-
-// Enrich record with computed fields
-const enrichRecord = (record) => ({
-  ...record,
-  sisaHari: calcSisaHari(record.tanggalExp),
 });
 
 // Multer storage config
@@ -89,16 +56,36 @@ const uploadFields = upload.fields([
 router.get(
   "/",
   catchAsync(async (req, res) => {
-    const data = readData().map(enrichRecord);
+    // Get all sertifikasi from MongoDB
+    const sertifikasi = await Sertifikasi.find().sort({ tanggalExp: 1 });
     
-    // Filter by user ID
-    const userSertifikasi = data.filter((d) => d.userId === req.user.id);
-    
-    userSertifikasi.sort((a, b) => new Date(a.tanggalExp) - new Date(b.tanggalExp));
     res.status(200).json({
       status: "success",
-      results: userSertifikasi.length,
-      data: userSertifikasi,
+      results: sertifikasi.length,
+      data: sertifikasi,
+    });
+  }),
+);
+
+// GET /api/v1/sertifikasi/stats — Get statistics for dashboard
+router.get(
+  "/stats",
+  catchAsync(async (req, res) => {
+    const allSertifikasi = await Sertifikasi.find();
+    
+    const total = allSertifikasi.length;
+    const expired = allSertifikasi.filter(s => s.status === "expired").length;
+    const expiringSoon = allSertifikasi.filter(s => s.status === "expiring_soon").length;
+    const active = allSertifikasi.filter(s => s.status === "active").length;
+    
+    res.status(200).json({
+      status: "success",
+      data: {
+        total,
+        expired,
+        expiringSoon,
+        active,
+      },
     });
   }),
 );
@@ -108,14 +95,7 @@ router.post(
   "/",
   uploadFields,
   catchAsync(async (req, res) => {
-    const data = readData();
     const body = { ...req.body };
-
-    // Generate unique ID
-    body._id = crypto.randomUUID();
-    body.userId = req.user.id; // Assign to current user
-    body.createdAt = new Date().toISOString();
-    body.updatedAt = new Date().toISOString();
 
     if (req.files?.fotoEquipment?.[0]) {
       body.fotoEquipment = `/uploads/foto/${req.files.fotoEquipment[0].filename}`;
@@ -124,12 +104,11 @@ router.post(
       body.dokumenSertifikat = `/uploads/dokumen/${req.files.dokumenSertifikat[0].filename}`;
     }
 
-    data.push(body);
-    writeData(data);
+    const sertifikasi = await Sertifikasi.create(body);
 
     res.status(201).json({
       status: "success",
-      data: enrichRecord(body),
+      data: sertifikasi,
     });
   }),
 );
@@ -138,14 +117,15 @@ router.post(
 router.get(
   "/:id",
   catchAsync(async (req, res, next) => {
-    const data = readData();
-    const record = data.find((d) => d._id === req.params.id && d.userId === req.user.id);
-    if (!record) {
+    const sertifikasi = await Sertifikasi.findById(req.params.id);
+    
+    if (!sertifikasi) {
       return next(new AppError("Sertifikasi tidak ditemukan", 404));
     }
+    
     res.status(200).json({
       status: "success",
-      data: enrichRecord(record),
+      data: sertifikasi,
     });
   }),
 );
@@ -155,14 +135,7 @@ router.put(
   "/:id",
   uploadFields,
   catchAsync(async (req, res, next) => {
-    const data = readData();
-    const index = data.findIndex((d) => d._id === req.params.id && d.userId === req.user.id);
-    if (index === -1) {
-      return next(new AppError("Sertifikasi tidak ditemukan atau tidak memiliki akses", 404));
-    }
-
     const body = { ...req.body };
-    body.updatedAt = new Date().toISOString();
 
     if (req.files?.fotoEquipment?.[0]) {
       body.fotoEquipment = `/uploads/foto/${req.files.fotoEquipment[0].filename}`;
@@ -171,12 +144,19 @@ router.put(
       body.dokumenSertifikat = `/uploads/dokumen/${req.files.dokumenSertifikat[0].filename}`;
     }
 
-    data[index] = { ...data[index], ...body };
-    writeData(data);
+    const sertifikasi = await Sertifikasi.findByIdAndUpdate(
+      req.params.id,
+      body,
+      { new: true, runValidators: true }
+    );
+    
+    if (!sertifikasi) {
+      return next(new AppError("Sertifikasi tidak ditemukan", 404));
+    }
 
     res.status(200).json({
       status: "success",
-      data: enrichRecord(data[index]),
+      data: sertifikasi,
     });
   }),
 );
@@ -185,31 +165,23 @@ router.put(
 router.delete(
   "/:id",
   catchAsync(async (req, res, next) => {
-    const data = readData();
-    const index = data.findIndex((d) => d._id === req.params.id && d.userId === req.user.id);
-    if (index === -1) {
-      return next(new AppError("Sertifikasi tidak ditemukan atau tidak memiliki akses", 404));
+    const sertifikasi = await Sertifikasi.findById(req.params.id);
+    
+    if (!sertifikasi) {
+      return next(new AppError("Sertifikasi tidak ditemukan", 404));
     }
-
-    const record = data[index];
 
     // Clean up uploaded files
-    if (record.fotoEquipment) {
-      const fotoPath = path.join(__dirname, "..", "..", record.fotoEquipment);
+    if (sertifikasi.fotoEquipment) {
+      const fotoPath = path.join(__dirname, "..", "..", sertifikasi.fotoEquipment);
       if (fs.existsSync(fotoPath)) fs.unlinkSync(fotoPath);
     }
-    if (record.dokumenSertifikat) {
-      const docPath = path.join(
-        __dirname,
-        "..",
-        "..",
-        record.dokumenSertifikat,
-      );
+    if (sertifikasi.dokumenSertifikat) {
+      const docPath = path.join(__dirname, "..", "..", sertifikasi.dokumenSertifikat);
       if (fs.existsSync(docPath)) fs.unlinkSync(docPath);
     }
 
-    data.splice(index, 1);
-    writeData(data);
+    await Sertifikasi.findByIdAndDelete(req.params.id);
 
     res.status(200).json({
       status: "success",

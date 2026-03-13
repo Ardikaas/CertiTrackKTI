@@ -141,16 +141,29 @@ const WhatsApp = () => {
     }
   }, []);
 
-  // Poll status/QR every 3 seconds, fetch settings & logs on mount
+  // Initialize WhatsApp on page mount, then poll status/QR every 3 seconds
   useEffect(() => {
-    fetchStatus();
-    fetchQR();
+    // Initialize WhatsApp service when page loads
+    const initService = async () => {
+      try {
+        await apiFetch(`${WA_API}/init`, { method: "POST" });
+        setStatus("connecting");
+        setQrMessage("Memulai layanan WhatsApp...");
+      } catch (err) {
+        console.error("Failed to initialize WhatsApp:", err);
+      }
+    };
+
+    initService();
     fetchSettings();
     fetchLogs();
+
+    // Poll for status and QR code
     const interval = setInterval(() => {
       fetchStatus();
       if (status !== "open") fetchQR();
     }, 3000);
+
     return () => clearInterval(interval);
   }, [fetchStatus, fetchQR, fetchSettings, fetchLogs, status]);
 

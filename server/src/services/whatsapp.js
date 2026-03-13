@@ -9,6 +9,7 @@ const QRCode = require("qrcode");
 const path = require("path");
 const fs = require("fs");
 const pino = require("pino");
+const logger = require("../utils/logger");
 
 const AUTH_DIR = path.join(__dirname, "..", "..", "auth_info_baileys");
 
@@ -18,24 +19,30 @@ let connectionStatus = "disconnected"; // 'disconnected' | 'connecting' | 'open'
 let retryCount = 0;
 const MAX_RETRIES = 5;
 
-const logger = pino({ level: "silent" });
+const baileysLogger = pino({ level: "silent" });
 
 /**
  * Initialize the WhatsApp socket connection
  * Uses Baileys v6.17.16 (latest stable) — fixes the 405 "client outdated" error
  */
 const initWhatsApp = async () => {
+  // Prevent re-initialization if already connected or connecting
+  if (connectionStatus === "open" || connectionStatus === "connecting") {
+    logger.info("WhatsApp already initialized or connecting", { connectionStatus });
+    return;
+  }
+
   try {
-    console.log("🟢 WhatsApp service initializing...");
+    logger.info("WhatsApp service initializing...");
 
     // Fetch latest WA version to prevent 405 errors
     let version;
     try {
       const { version: v, isLatest } = await fetchLatestBaileysVersion();
       version = v;
-      console.log(`📋 WA version: ${v.join(".")} (latest: ${isLatest})`);
+      logger.info(`WA version: ${v.join(".")} (latest: ${isLatest})`);
     } catch (err) {
-      console.warn("⚠️  Could not fetch version, using Baileys default");
+      logger.warn("Could not fetch version, using Baileys default");
     }
 
     const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
@@ -43,10 +50,10 @@ const initWhatsApp = async () => {
     const socketConfig = {
       auth: {
         creds: state.creds,
-        keys: makeCacheableSignalKeyStore(state.keys, logger),
+        keys: makeCacheableSignalKeyStore(state.keys, baileysLogger),
       },
       browser: ["CertiTrackKTI", "Chrome", "1.0.0"],
-      logger,
+      logger: baileysLogger,
       printQRInTerminal: false,
       connectTimeoutMs: 60000,
       syncFullHistory: false,
@@ -70,9 +77,9 @@ const initWhatsApp = async () => {
             margin: 2,
             color: { dark: "#1e293b", light: "#ffffff" },
           });
-          console.log("📱 QR Code generated — scan with WhatsApp");
+          logger.info("QR Code generated — scan with WhatsApp");
         } catch (err) {
-          console.error("Failed to generate QR code:", err.message);
+          logger.error("Failed to generate QR code:", { error: err.message });
         }
       }
 
@@ -83,25 +90,21 @@ const initWhatsApp = async () => {
         const statusCode = lastDisconnect?.error?.output?.statusCode;
         const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
-        console.log(
-          `⚠️  Connection closed (code: ${statusCode}). Reconnect: ${shouldReconnect}`,
-        );
+        logger.warn(`Connection closed (code: ${statusCode}). Reconnect: ${shouldReconnect}`);
 
         if (shouldReconnect && retryCount < MAX_RETRIES) {
           retryCount++;
           const delay = Math.min(retryCount * 3000, 15000);
-          console.log(
-            `🔄 Reconnecting in ${delay / 1000}s (attempt ${retryCount}/${MAX_RETRIES})...`,
-          );
+          logger.info(`Reconnecting in ${delay / 1000}s (attempt ${retryCount}/${MAX_RETRIES})...`);
           setTimeout(() => initWhatsApp(), delay);
         } else if (!shouldReconnect) {
           if (fs.existsSync(AUTH_DIR)) {
             fs.rmSync(AUTH_DIR, { recursive: true, force: true });
           }
-          console.log("🔴 Logged out. Session cleared.");
+          logger.info("Logged out. Session cleared.");
           retryCount = 0;
         } else {
-          console.log("🔴 Max retries reached.");
+          logger.error("Max retries reached.");
           retryCount = 0;
         }
       }
@@ -110,7 +113,7 @@ const initWhatsApp = async () => {
         connectionStatus = "open";
         qrDataURL = null;
         retryCount = 0;
-        console.log("✅ WhatsApp connected successfully!");
+        logger.info("WhatsApp connected successfully!");
       }
     });
 
@@ -125,19 +128,19 @@ const initWhatsApp = async () => {
             msg.message?.extendedTextMessage?.text ||
             "";
           if (text) {
-            console.log(`📩 Message from ${sender}: ${text}`);
+            logger.debug(`Message from ${sender}: ${text}`);
           }
         }
       }
     });
   } catch (error) {
-    console.error("Failed to initialize WhatsApp:", error.message);
+    logger.error("Failed to initialize WhatsApp:", { error: error.message });
     connectionStatus = "disconnected";
 
     if (retryCount < MAX_RETRIES) {
       retryCount++;
       const delay = retryCount * 3000;
-      console.log(`🔄 Retrying in ${delay / 1000}s...`);
+      logger.info(`Retrying in ${delay / 1000}s...`);
       setTimeout(() => initWhatsApp(), delay);
     }
   }
@@ -158,7 +161,7 @@ const sendMessage = async (phone, message) => {
   }
   const jid = formatJID(phone);
   const result = await sock.sendMessage(jid, { text: message });
-  console.log(`📤 Message sent to ${jid}`);
+  logger.info(`Message sent to ${jid}`);
   return result;
 };
 
@@ -169,7 +172,7 @@ const logout = async () => {
       sock = null;
     }
   } catch (error) {
-    console.error("Error during logout:", error.message);
+    logger.error("Error during logout:", { error: error.message });
   }
 
   if (fs.existsSync(AUTH_DIR)) {
@@ -179,7 +182,7 @@ const logout = async () => {
   qrDataURL = null;
   connectionStatus = "disconnected";
   retryCount = 0;
-  console.log("🔴 WhatsApp logged out and session cleared.");
+  logger.info("WhatsApp logged out and session cleared.");
 };
 
 module.exports = {

@@ -46,8 +46,7 @@ const Sidebar = () => {
           <NavLink
             to="/dashboard"
             className={({ isActive }) =>
-              `flex items-center gap-3.5 px-4 py-3.5 rounded-2xl font-bold text-sm transition-all group ${
-                isActive ? activeClass : inactiveClass
+              `flex items-center gap-3.5 px-4 py-3.5 rounded-2xl font-bold text-sm transition-all group ${isActive ? activeClass : inactiveClass
               }`
             }
           >
@@ -58,7 +57,7 @@ const Sidebar = () => {
                   strokeWidth={isActive ? 2.5 : 2}
                   className={`transition-colors ${isActive ? activeIcon : inactiveIcon}`}
                 />
-                <span>Dasbor</span>
+                <span>Dashboard</span>
               </>
             )}
           </NavLink>
@@ -71,8 +70,7 @@ const Sidebar = () => {
           <NavLink
             to="/sertifikasi/baru"
             className={({ isActive }) =>
-              `flex items-center gap-3.5 px-4 py-3.5 rounded-2xl font-bold text-sm transition-all group ${
-                isActive ? activeClass : inactiveClass
+              `flex items-center gap-3.5 px-4 py-3.5 rounded-2xl font-bold text-sm transition-all group ${isActive ? activeClass : inactiveClass
               }`
             }
           >
@@ -90,8 +88,7 @@ const Sidebar = () => {
           <NavLink
             to="/sertifikasi/data"
             className={({ isActive }) =>
-              `flex items-center gap-3.5 px-4 py-3.5 rounded-2xl font-bold text-sm transition-all group ${
-                isActive ? activeClass : inactiveClass
+              `flex items-center gap-3.5 px-4 py-3.5 rounded-2xl font-bold text-sm transition-all group ${isActive ? activeClass : inactiveClass
               }`
             }
           >
@@ -115,8 +112,7 @@ const Sidebar = () => {
           <NavLink
             to="/whatsapp"
             className={({ isActive }) =>
-              `flex items-center gap-3.5 px-4 py-3.5 rounded-2xl font-bold text-sm transition-all group ${
-                isActive ? activeClass : inactiveClass
+              `flex items-center gap-3.5 px-4 py-3.5 rounded-2xl font-bold text-sm transition-all group ${isActive ? activeClass : inactiveClass
               }`
             }
           >
@@ -139,8 +135,7 @@ const Sidebar = () => {
           <NavLink
             to="/settings"
             className={({ isActive }) =>
-              `flex items-center gap-3.5 px-4 py-3.5 rounded-2xl font-bold text-sm transition-all group border w-full ${
-                isActive ? "bg-white text-[#00a1d1] border-white shadow-sm" : "text-white border-transparent hover:bg-white hover:text-[#00a1d1] hover:border-white"
+              `flex items-center gap-3.5 px-4 py-3.5 rounded-2xl font-bold text-sm transition-all group border w-full ${isActive ? "bg-white text-[#00a1d1] border-white shadow-sm" : "text-white border-transparent hover:bg-white hover:text-[#00a1d1] hover:border-white"
               }`
             }
           >

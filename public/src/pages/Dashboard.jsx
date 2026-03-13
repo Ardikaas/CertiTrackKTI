@@ -9,12 +9,13 @@ import {
   XCircle,
   ShieldAlert,
 } from "lucide-react";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
 
 const Dashboard = () => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const [filterType, setFilterType] = useState("tahun");
+
 
   useEffect(() => {
     const fetchData = async () => {
@@ -22,16 +23,8 @@ const Dashboard = () => {
         const res = await apiFetch("/sertifikasi");
         const result = await res.json();
         if (result.status === "success") {
-          const enrichedData = result.data.map((d) => ({
-            ...d,
-            status:
-              d.sisaHari <= 0
-                ? "expired"
-                : d.sisaHari <= 30
-                  ? "expiring_soon"
-                  : "aktif",
-          }));
-          setData(enrichedData);
+          // MongoDB already provides sisaHari and status via virtuals
+          setData(result.data);
         }
       } catch (err) {
         console.error("Failed to fetch dashboard data:", err);
@@ -42,125 +35,15 @@ const Dashboard = () => {
     fetchData();
   }, []);
 
-  // Compute stat totals
+  // Compute stat totals from MongoDB data
   const total = data.length;
   const expired = data.filter((d) => d.status === "expired").length;
   const expiringSoon = data.filter((d) => d.status === "expiring_soon").length;
-  const aktif = data.filter(
-    (d) => d.status === "aktif" || d.sisaHari > 30,
-  ).length;
+  const aktif = data.filter((d) => d.status === "active").length;
 
   const urgentItems = data
     .filter((d) => d.status === "expired" || d.status === "expiring_soon")
     .sort((a, b) => a.sisaHari - b.sisaHari);
-
-  // Compute Trend Data
-  const currentYear = new Date().getFullYear();
-  const currentMonth = new Date().getMonth();
-  const getWeekStart = (date) => {
-    const d = new Date(date);
-    const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-    return new Date(d.setDate(diff)).setHours(0, 0, 0, 0);
-  };
-  const currentWeekStart = getWeekStart(new Date());
-
-  let trendData = [];
-  if (filterType === "minggu") {
-    trendData = [
-      { label: "Sen", activated: 0, expired: 0 },
-      { label: "Sel", activated: 0, expired: 0 },
-      { label: "Rab", activated: 0, expired: 0 },
-      { label: "Kam", activated: 0, expired: 0 },
-      { label: "Jum", activated: 0, expired: 0 },
-      { label: "Sab", activated: 0, expired: 0 },
-      { label: "Min", activated: 0, expired: 0 },
-    ];
-  } else if (filterType === "bulan") {
-    trendData = [
-      { label: "Mg 1", activated: 0, expired: 0 },
-      { label: "Mg 2", activated: 0, expired: 0 },
-      { label: "Mg 3", activated: 0, expired: 0 },
-      { label: "Mg 4", activated: 0, expired: 0 },
-      { label: "Mg 5", activated: 0, expired: 0 },
-    ];
-  } else {
-    const months = [
-      "Jan",
-      "Feb",
-      "Mar",
-      "Apr",
-      "Mei",
-      "Jun",
-      "Jul",
-      "Ags",
-      "Sep",
-      "Okt",
-      "Nov",
-      "Des",
-    ];
-    trendData = months.map((m) => ({ label: m, activated: 0, expired: 0 }));
-  }
-
-  let newCertThisPeriod = 0;
-
-  data.forEach((item) => {
-    // Process Aktivasi
-    if (item.tanggalTerbit) {
-      const d = new Date(item.tanggalTerbit);
-      if (filterType === "tahun" && d.getFullYear() === currentYear) {
-        trendData[d.getMonth()].activated++;
-        newCertThisPeriod++;
-      } else if (
-        filterType === "bulan" &&
-        d.getFullYear() === currentYear &&
-        d.getMonth() === currentMonth
-      ) {
-        const weekIndex = Math.min(Math.floor((d.getDate() - 1) / 7), 4);
-        trendData[weekIndex].activated++;
-        newCertThisPeriod++;
-      } else if (
-        filterType === "minggu" &&
-        getWeekStart(d) === currentWeekStart
-      ) {
-        const dayIndex = d.getDay() === 0 ? 6 : d.getDay() - 1;
-        trendData[dayIndex].activated++;
-        newCertThisPeriod++;
-      }
-    }
-    // Process Expired
-    if (item.tanggalExp) {
-      const d = new Date(item.tanggalExp);
-      if (filterType === "tahun" && d.getFullYear() === currentYear) {
-        trendData[d.getMonth()].expired++;
-      } else if (
-        filterType === "bulan" &&
-        d.getFullYear() === currentYear &&
-        d.getMonth() === currentMonth
-      ) {
-        const weekIndex = Math.min(Math.floor((d.getDate() - 1) / 7), 4);
-        trendData[weekIndex].expired++;
-      } else if (
-        filterType === "minggu" &&
-        getWeekStart(d) === currentWeekStart
-      ) {
-        const dayIndex = d.getDay() === 0 ? 6 : d.getDay() - 1;
-        trendData[dayIndex].expired++;
-      }
-    }
-  });
-
-  const maxChartVal = Math.max(
-    1,
-    ...trendData.map((t) => Math.max(t.activated, t.expired)),
-  );
-
-  const periodLabel =
-    filterType === "tahun"
-      ? "Tahun Ini"
-      : filterType === "bulan"
-        ? "Bulan Ini"
-        : "Minggu Ini";
 
   const formatDate = (dateStr) => {
     if (!dateStr) return "-";
@@ -222,12 +105,7 @@ const Dashboard = () => {
               <div className="p-2.5 bg-blue-50 rounded-xl text-blue-600 border border-blue-100 shadow-sm group-hover:scale-110 transition-transform">
                 <span className="material-symbols-outlined">construction</span>
               </div>
-              <span className="flex items-center text-xs font-bold text-emerald-700 bg-emerald-100/80 px-2.5 py-1 rounded-full border border-emerald-200 shadow-sm">
-                <span className="material-symbols-outlined text-[14px] mr-1">
-                  trending_up
-                </span>{" "}
-                12%
-              </span>
+
             </div>
             <h3 className="text-slate-500 text-sm font-semibold relative z-10">
               Total Peralatan
@@ -244,12 +122,6 @@ const Dashboard = () => {
               <div className="p-2.5 bg-emerald-50 rounded-xl text-emerald-600 border border-emerald-100 shadow-sm group-hover:scale-110 transition-transform">
                 <span className="material-symbols-outlined">verified</span>
               </div>
-              <span className="flex items-center text-xs font-bold text-emerald-700 bg-emerald-100/80 px-2.5 py-1 rounded-full border border-emerald-200 shadow-sm">
-                <span className="material-symbols-outlined text-[14px] mr-1">
-                  trending_flat
-                </span>{" "}
-                95%
-              </span>
             </div>
             <h3 className="text-slate-500 text-sm font-semibold relative z-10">
               Status Aman
@@ -268,12 +140,6 @@ const Dashboard = () => {
                   hourglass_empty
                 </span>
               </div>
-              <span className="flex items-center text-xs font-bold text-rose-700 bg-rose-100/80 px-2.5 py-1 rounded-full border border-rose-200 shadow-sm">
-                <span className="material-symbols-outlined text-[14px] mr-1">
-                  warning
-                </span>
-                Siaga
-              </span>
             </div>
             <h3 className="text-slate-500 text-sm font-semibold relative z-10">
               Mendekati Kedaluwarsa (30h)
@@ -290,12 +156,6 @@ const Dashboard = () => {
               <div className="p-2.5 bg-rose-50 rounded-xl text-rose-600 border border-rose-100 shadow-sm group-hover:scale-110 transition-transform">
                 <span className="material-symbols-outlined">cancel</span>
               </div>
-              <span className="flex items-center text-xs font-bold text-rose-700 bg-rose-100/80 px-2.5 py-1 rounded-full border border-rose-200 shadow-sm">
-                <span className="material-symbols-outlined text-[14px] mr-1">
-                  trending_down
-                </span>{" "}
-                2%
-              </span>
             </div>
             <h3 className="text-slate-500 text-sm font-semibold relative z-10">
               Telah Kedaluwarsa
@@ -385,11 +245,10 @@ const Dashboard = () => {
                         </td>
                         <td className="px-6 py-4">
                           <span
-                            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
-                              item.status === "expired"
-                                ? "bg-rose-50 text-rose-700 border-rose-200"
-                                : "bg-amber-50 text-amber-700 border-amber-200"
-                            }`}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${item.status === "expired"
+                              ? "bg-rose-50 text-rose-700 border-rose-200"
+                              : "bg-amber-50 text-amber-700 border-amber-200"
+                              }`}
                           >
                             <span
                               className={`w-1.5 h-1.5 rounded-full ${item.status === "expired" ? "bg-rose-500 animate-pulse" : "bg-amber-500"}`}
@@ -415,104 +274,73 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* Trends / Chart Area */}
-          <div className="flex flex-col rounded-2xl bg-white border border-slate-200 shadow-sm p-6 relative overflow-hidden">
+          {/* Status Distribution Pie Chart */}
+          <div className="flex flex-col rounded-2xl bg-white border border-slate-200 shadow-sm p-4 sm:p-6 relative overflow-hidden min-h-[400px] sm:min-h-[450px]">
             <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-primary/5 to-transparent rounded-bl-full -z-0"></div>
-            <div className="flex items-center justify-between mb-2 relative z-10">
-              <h3 className="text-lg font-extrabold text-slate-800">
-                Tren Aktivasi vs Kedaluwarsa
+            <div className="flex items-center justify-between mb-2 sm:mb-4 relative z-10">
+              <h3 className="text-base sm:text-lg font-extrabold text-slate-800">
+                Distribusi Status
               </h3>
-              <select
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
-                className="form-select text-xs py-1.5 pl-3 pr-8 border border-slate-200 rounded-lg bg-white shadow-sm text-slate-600 font-bold focus:ring-[3px] focus:ring-primary/10 focus:border-primary outline-none cursor-pointer"
-              >
-                <option value="tahun">Tahun Ini</option>
-                <option value="bulan">Bulan Ini</option>
-                <option value="minggu">Minggu Ini</option>
-              </select>
             </div>
 
-            {/* Legend */}
-            <div className="flex gap-4 mb-4 z-10 relative">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-sm bg-primary border border-blue-600 shadow-sm"></span>
-                <span className="text-[10px] font-bold text-slate-500 uppercase">
-                  Aktivasi
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-sm bg-rose-400 border border-rose-500 shadow-sm"></span>
-                <span className="text-[10px] font-bold text-slate-500 uppercase">
-                  Kedaluwarsa
-                </span>
-              </div>
+            <div className="flex-1 relative min-h-[200px] sm:min-h-[250px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+                  <Pie
+                    data={[
+                      { name: "Aktif", value: aktif, color: "#10b981" },
+                      { name: "Mendekati", value: expiringSoon, color: "#f59e0b" },
+                      { name: "Kedaluwarsa", value: expired, color: "#ef4444" },
+                    ].filter(item => item.value > 0)}
+                    cx="50%"
+                    cy="45%"
+                    innerRadius="40%"
+                    outerRadius="70%"
+                    paddingAngle={3}
+                    dataKey="value"
+                    label={({ value }) => `${value}`}
+                    labelLine={false}
+                  >
+                    {[
+                      { name: "Aktif", value: aktif, color: "#10b981" },
+                      { name: "Mendekati", value: expiringSoon, color: "#f59e0b" },
+                      { name: "Kedaluwarsa", value: expired, color: "#ef4444" },
+                    ].filter(item => item.value > 0).map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#1e293b",
+                      border: "none",
+                      borderRadius: "8px",
+                      color: "#fff",
+                      fontSize: "12px",
+                      fontWeight: "bold",
+                    }}
+                    formatter={(value, name) => [`${value} sertifikasi`, name]}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
             </div>
 
-            <div className="flex-1 flex flex-col justify-end relative h-52 mt-2 z-10 border-b border-slate-200">
-              {/* Dynamic Chart Representation */}
-              <div className="absolute inset-0 flex items-end justify-between px-1 gap-1 sm:gap-2">
-                {trendData.map((d, idx) => {
-                  const activatedHeight = (d.activated / maxChartVal) * 100;
-                  const expiredHeight = (d.expired / maxChartVal) * 100;
-
-                  return (
-                    <div
-                      key={idx}
-                      className="flex-1 flex items-end justify-center h-full gap-[2px] sm:gap-1 group/month"
-                    >
-                      {/* Activated Bar */}
-                      <div
-                        className="w-full max-w-[14px] sm:max-w-[20px] bg-primary rounded-t-sm relative group/bar transition-all hover:brightness-110 shadow-sm border border-blue-600 border-b-0 cursor-pointer flex flex-col justify-end"
-                        style={{ height: `${Math.max(2, activatedHeight)}%` }}
-                      >
-                        <div className="hidden group-hover/bar:block absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] font-bold py-1 px-2 rounded shadow-lg z-20 whitespace-nowrap">
-                          {d.label}: {d.activated} Baru
-                        </div>
-                      </div>
-
-                      {/* Expired Bar */}
-                      <div
-                        className="w-full max-w-[14px] sm:max-w-[20px] bg-rose-400 rounded-t-sm relative group/bar transition-all hover:brightness-110 shadow-sm border border-rose-500 border-b-0 cursor-pointer flex flex-col justify-end"
-                        style={{ height: `${Math.max(2, expiredHeight)}%` }}
-                      >
-                        <div className="hidden group-hover/bar:block absolute -top-8 left-1/2 -translate-x-1/2 bg-rose-900 text-white text-[10px] font-bold py-1 px-2 rounded shadow-lg z-20 whitespace-nowrap">
-                          {d.label}: {d.expired} Kedaluwarsa
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-            {/* X Axis Labels */}
-            <div className="flex justify-between text-[10px] sm:text-[11px] font-bold text-slate-400 mt-2 px-1 pb-2">
-              {trendData.map((d, idx) => (
-                <span key={idx} className="flex-1 text-center truncate">
-                  {d.label}
-                </span>
-              ))}
-            </div>
-
-            <div className="mt-8 pt-6 border-t border-slate-100 relative z-10">
-              <div className="flex justify-between items-center bg-slate-50/50 p-4 rounded-xl border border-slate-100">
-                <div>
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                    Sertifikasi Baru
-                  </p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <p className="text-3xl font-extrabold text-slate-800 tracking-tight">
-                      +{newCertThisPeriod}
-                    </p>
-                    <span className="text-xs font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-md">
-                      {periodLabel}
-                    </span>
-                  </div>
+            {/* Compact Centered Legend */}
+            <div className="mt-2 pt-3 border-t border-slate-100">
+              <div className="flex flex-wrap justify-center gap-3 sm:gap-5">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
+                  <span className="text-sm font-bold text-slate-700">{aktif}</span>
+                  <span className="text-xs text-slate-500">Aktif</span>
                 </div>
-                <div className="size-12 rounded-xl bg-blue-50 flex items-center justify-center text-primary shadow-sm border border-blue-100">
-                  <span className="material-symbols-outlined text-[24px]">
-                    analytics
-                  </span>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-amber-500"></div>
+                  <span className="text-sm font-bold text-slate-700">{expiringSoon}</span>
+                  <span className="text-xs text-slate-500">Mendekati</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-rose-500"></div>
+                  <span className="text-sm font-bold text-slate-700">{expired}</span>
+                  <span className="text-xs text-slate-500">Kedaluwarsa</span>
                 </div>
               </div>
             </div>
