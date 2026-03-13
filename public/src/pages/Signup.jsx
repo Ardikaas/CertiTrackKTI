@@ -1,9 +1,8 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { API_BASE } from "../utils/config";
 import { Eye, EyeOff, UserPlus, AlertCircle, CheckCircle } from "lucide-react";
-
-const API_BASE = "http://localhost:5000/api/v1";
 
 const Signup = () => {
   const [form, setForm] = useState({ username: "", name: "", password: "", confirmPassword: "" });

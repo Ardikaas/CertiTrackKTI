@@ -1,5 +1,5 @@
 // Helper: fetch API dengan Authorization header dari localStorage
-export const API_BASE = "http://localhost:5000/api/v1";
+import { API_BASE } from "./config";
 
 export const apiFetch = async (path, options = {}) => {
   const token = localStorage.getItem("ct_token");

@@ -84,6 +84,93 @@ router.post(
   }),
 );
 
+// POST /api/v1/notifications/test-minutes — Send test with certification expiring in X minutes
+router.post(
+  "/test-minutes",
+  catchAsync(async (req, res) => {
+    const { minutes } = req.body;
+    const minutesVal = parseInt(minutes) || 5;
+    
+    // Get current settings
+    const settings = readJSON(SETTINGS_FILE, DEFAULT_SETTINGS);
+    
+    // Check WhatsApp connection
+    const { getStatus } = require("../services/whatsapp");
+    if (getStatus() !== "open") {
+      return res.status(200).json({
+        status: "success",
+        data: { error: "WhatsApp belum terhubung. Hubungkan dulu via QR code." },
+      });
+    }
+
+    if (settings.recipients.length === 0) {
+      return res.status(200).json({
+        status: "success",
+        data: { error: "Belum ada nomor penerima. Tambahkan di Pengaturan Notifikasi." },
+      });
+    }
+
+    // Create a test certification that expires in X minutes
+    const expDate = new Date(Date.now() + minutesVal * 60 * 1000);
+    const testCert = {
+      namaSertifikasi: `TEST - Sertifikasi Demo (${minutesVal} menit)`,
+      nomorSertifikat: `TEST-${Date.now()}`,
+      jenisSertifikasi: "Test",
+      tanggalExp: expDate.toISOString(),
+      sisaHari: 0, // Less than a day
+    };
+
+    // Build message
+    let msg = `⚠️ *TEST NOTIFIKASI - ${minutesVal} MENIT*\n\n`;
+    msg += `Sertifikasi test akan expired dalam ${minutesVal} menit:\n\n`;
+    msg += `1. *${testCert.namaSertifikasi}* (${testCert.nomorSertifikat})\n`;
+    msg += `   Jenis: ${testCert.jenisSertifikasi}\n`;
+    msg += `   Expired: ${new Date(testCert.tanggalExp).toLocaleString("id-ID")}\n`;
+    msg += `   Sisa: ${minutesVal} menit\n\n`;
+    msg += `— _CertiTrackKTI (Test Mode)_`;
+
+    // Send to all recipients
+    const { sendMessage } = require("../services/whatsapp");
+    const results = [];
+    
+    for (const phone of settings.recipients) {
+      try {
+        await sendMessage(phone, msg);
+        addLog({ 
+          type: "test_expiring_minutes", 
+          recipient: phone, 
+          message: msg, 
+          status: "sent",
+          metadata: { minutes: minutesVal }
+        });
+        results.push({ phone, status: "sent" });
+      } catch (error) {
+        addLog({ 
+          type: "test_expiring_minutes", 
+          recipient: phone, 
+          message: msg, 
+          status: "failed", 
+          error: error.message 
+        });
+        results.push({ phone, status: "failed", error: error.message });
+      }
+    }
+
+    res.status(200).json({
+      status: "success",
+      data: {
+        sent: [{
+          type: "test_expiring_minutes",
+          count: 1,
+          results: results,
+        }],
+        skipped: [],
+        testCert: testCert,
+      },
+    });
+  }),
+);
+
 // GET /api/v1/notifications/log — Recent logs
 router.get(
   "/log",

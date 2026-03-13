@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { apiFetch } from "../utils/api";
+import { API_BASE } from "../utils/config";
 import {
   Search,
   Eye,
@@ -507,13 +508,13 @@ const DataSertifikasi = () => {
                   {selectedItem.fotoEquipment ? (
                     <div className="rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 flex items-center justify-center p-2 h-48 shadow-inner relative group">
                       <img
-                        src={`http://localhost:5000${selectedItem.fotoEquipment}`}
+                        src={`${API_BASE.replace('/api/v1', '')}${selectedItem.fotoEquipment}`}
                         alt="Peralatan"
                         className="max-h-full object-contain rounded-xl"
                       />
                       <div className="absolute inset-0 bg-slate-900/5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                         <a
-                          href={`http://localhost:5000${selectedItem.fotoEquipment}`}
+                          href={`${API_BASE.replace('/api/v1', '')}${selectedItem.fotoEquipment}`}
                           target="_blank"
                           rel="noreferrer"
                           className="bg-white text-slate-800 text-xs font-bold px-3 py-1.5 rounded-lg shadow-lg flex items-center gap-1.5 hover:bg-slate-50 transform scale-95 group-hover:scale-100 transition-all"
@@ -540,7 +541,7 @@ const DataSertifikasi = () => {
                   </p>
                   {selectedItem.dokumenSertifikat ? (
                     <a
-                      href={`http://localhost:5000${selectedItem.dokumenSertifikat}`}
+                      href={`${API_BASE.replace('/api/v1', '')}${selectedItem.dokumenSertifikat}`}
                       target="_blank"
                       rel="noreferrer"
                       className="h-48 rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50 flex flex-col items-center justify-center text-primary shadow-sm hover:border-primary/50 hover:shadow-md transition-all group relative overflow-hidden"

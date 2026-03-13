@@ -86,6 +86,8 @@ const WhatsApp = () => {
   const [settingsResult, setSettingsResult] = useState(null);
   const [testingNotif, setTestingNotif] = useState(false);
   const [testResult, setTestResult] = useState(null);
+  const [testMinutes, setTestMinutes] = useState(5);
+  const [testingMinutesNotif, setTestingMinutesNotif] = useState(false);
 
   // Notification logs
   const [logs, setLogs] = useState([]);
@@ -291,6 +293,43 @@ const WhatsApp = () => {
       setTimeout(() => setTestResult(null), 4000);
     } finally {
       setTestingNotif(false);
+    }
+  };
+
+  // Test notification with minutes (for testing expiration logic quickly)
+  const testNotificationWithMinutes = async () => {
+    setTestingMinutesNotif(true);
+    setTestResult(null);
+    try {
+      const res = await apiFetch(`${NOTIF_API}/test-minutes`, {
+        method: "POST",
+        body: JSON.stringify({ minutes: testMinutes }),
+      });
+      const data = await res.json();
+      if (data.status === "success") {
+        if (data.data.error) {
+          setTestResult({ type: "error", text: data.data.error });
+          setTimeout(() => setTestResult(null), 4000);
+        } else {
+          setTestResult({
+            type: "success",
+            text: `Test dengan ${testMinutes} menit berhasil dikirim!`,
+          });
+          setTimeout(() => setTestResult(null), 4000);
+          fetchLogs();
+        }
+      } else {
+        setTestResult({
+          type: "error",
+          text: data.message || "Gagal mengirim test",
+        });
+        setTimeout(() => setTestResult(null), 4000);
+      }
+    } catch {
+      setTestResult({ type: "error", text: "Gagal mengirim test notifikasi." });
+      setTimeout(() => setTestResult(null), 4000);
+    } finally {
+      setTestingMinutesNotif(false);
     }
   };
 
@@ -795,6 +834,33 @@ const WhatsApp = () => {
 
               {/* Footer Actions */}
               <div className="px-8 py-6 bg-slate-50/80 border-t border-slate-200 mt-auto flex items-center justify-end gap-4 flex-wrap">
+                {/* Test with Minutes */}
+                <div className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl shadow-sm">
+                  <span className="text-sm font-bold text-slate-600">Test:</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={60}
+                    value={testMinutes}
+                    onChange={(e) => setTestMinutes(parseInt(e.target.value) || 5)}
+                    className="w-14 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-center text-primary focus:outline-none focus:border-primary focus:ring-[3px] focus:ring-primary/20 transition-all shadow-inner"
+                  />
+                  <span className="text-sm font-bold text-slate-600">menit</span>
+                  <button
+                    onClick={testNotificationWithMinutes}
+                    disabled={testingMinutesNotif || status !== "open"}
+                    className="ml-2 px-4 py-2 bg-amber-50 border border-amber-200 text-amber-700 rounded-lg text-sm font-bold hover:bg-amber-100 hover:border-amber-300 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Test dengan data yang akan expired dalam X menit"
+                  >
+                    {testingMinutesNotif ? (
+                      <Loader size={16} className="animate-spin text-amber-600" />
+                    ) : (
+                      <PlayCircle size={16} className="text-amber-600" />
+                    )}
+                    Kirim Test
+                  </button>
+                </div>
+
                 <button
                   onClick={testNotification}
                   disabled={testingNotif || status !== "open"}
