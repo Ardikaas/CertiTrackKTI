@@ -13,7 +13,7 @@ const app = express();
 // Configure Rate Limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === "development" ? 1000 : 100, // Higher limit for dev
+  max: process.env.NODE_ENV === "development" ? 3000 : 1000, // 1000 req/15min for production, 3000 for dev
   standardHeaders: true,
   legacyHeaders: false,
   message: { status: "error", message: "Terlalu banyak request dari IP ini, silakan coba lagi dalam 15 menit." },

@@ -2,16 +2,12 @@ networks:
   certitrack-network:
     driver: bridge
 
-volumes:
-  mongo-data:
-
 services:
   mongodb:
     image: mongo:7
     container_name: certitrack-mongodb
     restart: unless-stopped
-    ports:
-      - "27017:27017"
+    # Removed port mapping - accessible only within Docker network
     environment:
       - MONGO_INITDB_ROOT_USERNAME=admin
       - MONGO_INITDB_ROOT_PASSWORD=admin123
@@ -21,9 +17,19 @@ services:
     networks:
       - certitrack-network
 
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared-certitrack
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+    networks:
+      - certitrack-network
+
   frontend:
     build:
-      context: ./public
+      context: ~/opencode-setup/opencode/data/workspace/CertiTrackKTI/public
       dockerfile: Dockerfile
     container_name: certitrack-frontend
     restart: unless-stopped
@@ -36,7 +42,7 @@ services:
 
   backend:
     build:
-      context: ./server
+      context: ~/opencode-setup/opencode/data/workspace/CertiTrackKTI/server
       dockerfile: Dockerfile
     container_name: certitrack-backend
     restart: unless-stopped
@@ -46,8 +52,16 @@ services:
       - NODE_ENV=production
       - PORT=5000
       - MONGO_URI=mongodb://admin:admin123@mongodb:27017/certitrack?authSource=admin
-      - JWT_SECRET=${JWT_SECRET}
+      - JWT_SECRET=${JWT_SECRET:-certitrack_secret_default}
     depends_on:
       - mongodb
+    volumes:
+      - backend-data:/app/data
+      - backend-uploads:/app/uploads
     networks:
       - certitrack-network
+
+volumes:
+  backend-data:
+  backend-uploads:
+  mongo-data:
