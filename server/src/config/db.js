@@ -5,12 +5,19 @@ const connectDB = async () => {
     console.warn("⚠️  MONGO_URI not set — skipping MongoDB connection");
     return;
   }
+  
   try {
-    const conn = await mongoose.connect(process.env.MONGO_URI);
-    console.log(`MongoDB Connected: ${conn.connection.host}`);
+    const conn = await mongoose.connect(process.env.MONGO_URI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+    });
+    console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
   } catch (error) {
-    console.error(`⚠️  MongoDB connection failed: ${error.message}`);
-    console.warn("⚠️  Server will continue without MongoDB");
+    console.error(`❌ MongoDB connection failed: ${error.message}`);
+    console.error(`❌ Connection string: ${process.env.MONGO_URI.replace(/:.*@/, ':****@')}`);
+    throw error; // Don't continue without DB
   }
 };
 
