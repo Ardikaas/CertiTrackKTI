@@ -3,9 +3,6 @@ const mongoose = require("mongoose");
 const connectDB = async () => {
   if (!process.env.MONGO_URI) {
     console.warn("⚠️  MONGO_URI not set — skipping MongoDB connection");
-    // Disable buffering so queries fail immediately with a clear error
-    // instead of hanging silently for 10 seconds
-    mongoose.set("bufferCommands", false);
     return;
   }
 
@@ -13,8 +10,6 @@ const connectDB = async () => {
     const conn = await mongoose.connect(process.env.MONGO_URI, {
       serverSelectionTimeoutMS: 5000,
       socketTimeoutMS: 45000,
-      // Fail fast: don't buffer queries while disconnected
-      bufferCommands: false,
     });
     console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
 

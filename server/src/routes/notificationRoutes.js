@@ -1,65 +1,22 @@
 const express = require("express");
 const router = express.Router();
-const path = require("path");
-const fs = require("fs");
 const catchAsync = require("../utils/catchAsync");
+const AppError = require("../utils/AppError");
+const { getSettings, saveSettings, getLogs } = require("../services/notificationService");
 const {
   sendNotifications,
   restartScheduler,
+  scheduleTestNotification,
+  cancelScheduledTest,
+  getScheduledTestMeta,
 } = require("../services/notificationScheduler");
-
-// JSON file paths for storage (no database needed)
-const DATA_DIR = path.join(__dirname, "..", "..", "data");
-const SETTINGS_FILE = path.join(DATA_DIR, "notification_settings.json");
-const LOGS_FILE = path.join(DATA_DIR, "notification_logs.json");
-
-// Ensure data directory exists
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-
-// Default settings
-const DEFAULT_SETTINGS = {
-  recipients: [],
-  enabledTypes: { expiringSoon: true, weeklyCheck: true, expired: true },
-  expiringDays: 30,
-};
-
-// Helper: read JSON file with defaults
-const readJSON = (filePath, defaultValue) => {
-  try {
-    if (fs.existsSync(filePath)) {
-      return JSON.parse(fs.readFileSync(filePath, "utf8"));
-    }
-  } catch (err) {
-    console.error(`Error reading ${filePath}:`, err.message);
-  }
-  return defaultValue;
-};
-
-// Helper: write JSON file
-const writeJSON = (filePath, data) => {
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf8");
-};
-
-const addLog = (log) => {
-  const logs = readJSON(LOGS_FILE, []);
-  logs.push({
-    ...log,
-    _id: Date.now().toString(),
-    createdAt: new Date().toISOString(),
-  });
-  if (logs.length > 200) logs.splice(0, logs.length - 200);
-  writeJSON(LOGS_FILE, logs);
-};
 
 // GET /api/v1/notifications/settings
 router.get(
   "/settings",
   catchAsync(async (req, res) => {
-    const settings = readJSON(SETTINGS_FILE, DEFAULT_SETTINGS);
-    res.status(200).json({
-      status: "success",
-      data: settings,
-    });
+    const settings = await getSettings();
+    res.status(200).json({ status: "success", data: settings });
   }),
 );
 
@@ -67,155 +24,89 @@ router.get(
 router.put(
   "/settings",
   catchAsync(async (req, res) => {
-    let settings = readJSON(SETTINGS_FILE, DEFAULT_SETTINGS);
-    const { recipients, expiringDays, enabledTypes } = req.body;
+    const { recipients, expiringDays, enabledTypes, scheduleTime, testMode } = req.body;
 
-    if (recipients !== undefined) settings.recipients = recipients;
-    if (expiringDays !== undefined) settings.expiringDays = expiringDays;
-    if (enabledTypes !== undefined) {
-      settings.enabledTypes = { ...settings.enabledTypes, ...enabledTypes };
+    // saveSettings validates scheduleTime format and throws AppError 400 if invalid
+    const updated = await saveSettings({ recipients, expiringDays, enabledTypes, scheduleTime, testMode });
+
+    // Restart scheduler only when scheduleTime changed — NOT on testMode change
+    if (scheduleTime !== undefined) {
+      await restartScheduler();
     }
 
-    writeJSON(SETTINGS_FILE, settings);
-
-    // Restart scheduler if schedule time changed
-    if (req.body.scheduleTime !== undefined) {
-      restartScheduler();
-    }
-
-    res.status(200).json({
-      status: "success",
-      data: settings,
-    });
+    res.status(200).json({ status: "success", data: updated });
   }),
 );
 
-// POST /api/v1/notifications/test — Send test notification now
+// POST /api/v1/notifications/test — backward-compatible instant test (uses sample data fallback)
 router.post(
   "/test",
   catchAsync(async (req, res) => {
     const { type } = req.body;
     const result = await sendNotifications(type || "all", true);
-    res.status(200).json({
-      status: "success",
-      data: result,
-    });
+    res.status(200).json({ status: "success", data: result });
   }),
 );
 
-// POST /api/v1/notifications/test-minutes — Send test with certification expiring in X minutes
+// POST /api/v1/notifications/test-preview — real DB data, custom threshold
 router.post(
-  "/test-minutes",
+  "/test-preview",
   catchAsync(async (req, res) => {
-    const { minutes } = req.body;
-    const minutesVal = parseInt(minutes) || 5;
+    const { type, thresholdDays } = req.body;
+    const threshold = thresholdDays !== undefined ? parseInt(thresholdDays, 10) : null;
 
-    // Get current settings
-    const settings = readJSON(SETTINGS_FILE, DEFAULT_SETTINGS);
-
-    // Check WhatsApp connection
-    const { getStatus } = require("../services/whatsapp");
-    if (getStatus() !== "open") {
-      return res.status(200).json({
-        status: "success",
-        data: {
-          error: "WhatsApp belum terhubung. Hubungkan dulu via QR code.",
-        },
-      });
+    if (threshold !== null && (isNaN(threshold) || threshold < 1)) {
+      throw new AppError("thresholdDays must be a positive integer", 400);
     }
 
-    if (settings.recipients.length === 0) {
-      return res.status(200).json({
-        status: "success",
-        data: {
-          error:
-            "Belum ada nomor penerima. Tambahkan di Pengaturan Notifikasi.",
-        },
-      });
-    }
-
-    // Create a test certification that expires in X minutes
-    const expDate = new Date(Date.now() + minutesVal * 60 * 1000);
-    const testCert = {
-      namaSertifikasi: `TEST - Sertifikasi Demo (${minutesVal} menit)`,
-      nomorSertifikat: `TEST-${Date.now()}`,
-      jenisSertifikasi: "Test",
-      tanggalExp: expDate.toISOString(),
-      sisaHari: 0, // Less than a day
-    };
-
-    // Build message
-    let msg = `⚠️ *TEST NOTIFIKASI - ${minutesVal} MENIT*\n\n`;
-    msg += `Sertifikasi test akan expired dalam ${minutesVal} menit:\n\n`;
-    msg += `1. *${testCert.namaSertifikasi}* (${testCert.nomorSertifikat})\n`;
-    msg += `   Jenis: ${testCert.jenisSertifikasi}\n`;
-    msg += `   Expired: ${new Date(testCert.tanggalExp).toLocaleString("id-ID")}\n`;
-    msg += `   Sisa: ${minutesVal} menit\n\n`;
-    msg += `— _CertiTrackKTI (Test Mode)_`;
-
-    // Send to all recipients
-    const { sendMessage } = require("../services/whatsapp");
-    const results = [];
-
-    for (const phone of settings.recipients) {
-      try {
-        await sendMessage(phone, msg);
-        addLog({
-          type: "test_expiring_minutes",
-          recipient: phone,
-          message: msg,
-          status: "sent",
-          metadata: { minutes: minutesVal },
-        });
-        results.push({ phone, status: "sent" });
-      } catch (error) {
-        addLog({
-          type: "test_expiring_minutes",
-          recipient: phone,
-          message: msg,
-          status: "failed",
-          error: error.message,
-        });
-        results.push({ phone, status: "failed", error: error.message });
-      }
-    }
-
-    res.status(200).json({
-      status: "success",
-      data: {
-        sent: [
-          {
-            type: "test_expiring_minutes",
-            count: 1,
-            results: results,
-          },
-        ],
-        skipped: [],
-        testCert: testCert,
-      },
-    });
+    // Pass "test_preview" as logTypeOverride so logs get amber TEST badge
+    const result = await sendNotifications(type || "all", true, threshold, "test_preview");
+    res.status(200).json({ status: "success", data: result });
   }),
 );
 
-// GET /api/v1/notifications/log — Recent logs
+// POST /api/v1/notifications/test-schedule — one-shot setTimeout in X minutes
+router.post(
+  "/test-schedule",
+  catchAsync(async (req, res) => {
+    const { minutes, type } = req.body;
+    const minutesVal = parseInt(minutes, 10);
+
+    if (isNaN(minutesVal) || minutesVal < 1 || minutesVal > 60) {
+      throw new AppError("minutes must be between 1 and 60", 400);
+    }
+
+    const meta = scheduleTestNotification(minutesVal, type || "all");
+    res.status(200).json({ status: "success", data: meta });
+  }),
+);
+
+// DELETE /api/v1/notifications/test-schedule — cancel pending scheduled test
+router.delete(
+  "/test-schedule",
+  catchAsync(async (req, res) => {
+    const cancelled = cancelScheduledTest();
+    res.status(200).json({ status: "success", data: { cancelled } });
+  }),
+);
+
+// GET /api/v1/notifications/test-schedule — check if a test is scheduled
+router.get(
+  "/test-schedule",
+  catchAsync(async (req, res) => {
+    const meta = getScheduledTestMeta();
+    res.status(200).json({ status: "success", data: meta });
+  }),
+);
+
+// GET /api/v1/notifications/log — recent logs from MongoDB
 router.get(
   "/log",
   catchAsync(async (req, res) => {
-    const logs = readJSON(LOGS_FILE, []);
-    // Return latest 50, sorted newest first
-    const sorted = logs
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-      .slice(0, 50);
-    res.status(200).json({
-      status: "success",
-      results: sorted.length,
-      data: sorted,
-    });
+    const limit = parseInt(req.query.limit, 10) || 50;
+    const logs = await getLogs(limit);
+    res.status(200).json({ status: "success", results: logs.length, data: logs });
   }),
 );
-
-// Export helpers for scheduler to use
-router.readSettings = () => readJSON(SETTINGS_FILE, DEFAULT_SETTINGS);
-router.addLog = addLog;
 
 module.exports = router;

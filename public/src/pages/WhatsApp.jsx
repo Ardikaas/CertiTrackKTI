@@ -87,7 +87,6 @@ const WhatsApp = () => {
   const [testingNotif, setTestingNotif] = useState(false);
   const [testResult, setTestResult] = useState(null);
   const [testMinutes, setTestMinutes] = useState(5);
-  const [testingMinutesNotif, setTestingMinutesNotif] = useState(false);
 
   // Notification logs
   const [logs, setLogs] = useState([]);
@@ -97,6 +96,17 @@ const WhatsApp = () => {
 
   // QR code expiry countdown
   const [qrCountdown, setQrCountdown] = useState(20);
+
+  // Test mode
+  const [testMode, setTestMode] = useState(false);
+  // Scheduled test: { scheduledFor: ISO string, minutes: N } or null
+  const [scheduledTest, setScheduledTest] = useState(null);
+  // Countdown seconds remaining for scheduled test
+  const [schedCountdown, setSchedCountdown] = useState(0);
+  // Test preview threshold (days)
+  const [previewThreshold, setPreviewThreshold] = useState(999);
+  const [testingPreview, setTestingPreview] = useState(false);
+  const [schedulingTest, setSchedulingTest] = useState(false);
 
   // Ref to track status inside intervals without causing re-renders
   const statusRef = useRef("disconnected");
@@ -138,7 +148,10 @@ const WhatsApp = () => {
     try {
       const res = await apiFetch(`${NOTIF_API}/settings`);
       const data = await res.json();
-      if (data.status === "success" && data.data) setSettings(data.data);
+      if (data.status === "success" && data.data) {
+        setSettings(data.data);
+        setTestMode(data.data.testMode ?? false);
+      }
     } catch {
       /* keep defaults */
     }
@@ -184,10 +197,23 @@ const WhatsApp = () => {
         if (!cancelled) setStatus("disconnected");
       }
 
-      // 3. Load settings and logs once
+      // 3. Load settings, logs, and any pending scheduled test once
       if (!cancelled) {
         fetchSettings();
         fetchLogs();
+        // Restore scheduled test state if server still has one pending
+        try {
+          const schedRes = await apiFetch(`${NOTIF_API}/test-schedule`);
+          const schedData = await schedRes.json();
+          if (!cancelled && schedData.status === "success" && schedData.data) {
+            const meta = schedData.data;
+            const secsLeft = Math.round((new Date(meta.scheduledFor) - Date.now()) / 1000);
+            if (secsLeft > 0) {
+              setScheduledTest(meta);
+              setSchedCountdown(secsLeft);
+            }
+          }
+        } catch { /* ignore */ }
       }
     };
 
@@ -237,6 +263,28 @@ const WhatsApp = () => {
     }, 1000);
     return () => clearInterval(timer);
   }, [qrCode]);
+
+  // Scheduled test countdown
+  useEffect(() => {
+    if (!scheduledTest) return;
+    if (schedCountdown <= 0) {
+      setScheduledTest(null);
+      fetchLogs();
+      return;
+    }
+    const timer = setInterval(() => {
+      setSchedCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          setScheduledTest(null);
+          fetchLogs();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [scheduledTest, fetchLogs]);
 
   // Logout
   const handleLogout = async () => {
@@ -332,6 +380,85 @@ const WhatsApp = () => {
     }
   };
 
+  // Toggle test mode — saves immediately
+  const toggleTestMode = async () => {
+    const newVal = !testMode;
+    setTestMode(newVal);
+    try {
+      await apiFetch(`${NOTIF_API}/settings`, {
+        method: "PUT",
+        body: JSON.stringify({ testMode: newVal }),
+      });
+    } catch {
+      setTestMode(!newVal); // revert on failure
+    }
+  };
+
+  // Instant preview with real DB data and custom threshold
+  const testPreview = async () => {
+    setTestingPreview(true);
+    setTestResult(null);
+    try {
+      const res = await apiFetch(`${NOTIF_API}/test-preview`, {
+        method: "POST",
+        body: JSON.stringify({ type: "all", thresholdDays: previewThreshold }),
+      });
+      const data = await res.json();
+      if (data.status === "success") {
+        if (data.data.error) {
+          setTestResult({ type: "error", text: data.data.error });
+        } else {
+          setTestResult({ type: "success", text: `Preview dikirim! (threshold: ${previewThreshold} hari)` });
+          fetchLogs();
+        }
+      } else {
+        setTestResult({ type: "error", text: data.message || "Gagal mengirim preview" });
+      }
+    } catch {
+      setTestResult({ type: "error", text: "Gagal mengirim preview." });
+    } finally {
+      setTestingPreview(false);
+      setTimeout(() => setTestResult(null), 4000);
+    }
+  };
+
+  // Schedule a one-shot test notification
+  const scheduleTest = async () => {
+    setSchedulingTest(true);
+    setTestResult(null);
+    try {
+      const res = await apiFetch(`${NOTIF_API}/test-schedule`, {
+        method: "POST",
+        body: JSON.stringify({ minutes: testMinutes, type: "all" }),
+      });
+      const data = await res.json();
+      if (data.status === "success") {
+        setScheduledTest(data.data);
+        const secs = Math.round((new Date(data.data.scheduledFor) - Date.now()) / 1000);
+        setSchedCountdown(secs);
+        setTestResult({ type: "success", text: `Test dijadwalkan dalam ${data.data.minutes} menit!` });
+        setTimeout(() => setTestResult(null), 4000);
+      } else {
+        setTestResult({ type: "error", text: data.message || "Gagal menjadwalkan test" });
+        setTimeout(() => setTestResult(null), 4000);
+      }
+    } catch {
+      setTestResult({ type: "error", text: "Gagal menjadwalkan test." });
+      setTimeout(() => setTestResult(null), 4000);
+    } finally {
+      setSchedulingTest(false);
+    }
+  };
+
+  // Cancel a pending scheduled test
+  const cancelTest = async () => {
+    try {
+      await apiFetch(`${NOTIF_API}/test-schedule`, { method: "DELETE" });
+    } catch { /* ignore */ }
+    setScheduledTest(null);
+    setSchedCountdown(0);
+  };
+
   // Test notification
   const testNotification = async () => {
     setTestingNotif(true);
@@ -370,41 +497,6 @@ const WhatsApp = () => {
   };
 
   // Test notification with minutes (for testing expiration logic quickly)
-  const testNotificationWithMinutes = async () => {
-    setTestingMinutesNotif(true);
-    setTestResult(null);
-    try {
-      const res = await apiFetch(`${NOTIF_API}/test-minutes`, {
-        method: "POST",
-        body: JSON.stringify({ minutes: testMinutes }),
-      });
-      const data = await res.json();
-      if (data.status === "success") {
-        if (data.data.error) {
-          setTestResult({ type: "error", text: data.data.error });
-          setTimeout(() => setTestResult(null), 4000);
-        } else {
-          setTestResult({
-            type: "success",
-            text: `Test dengan ${testMinutes} menit berhasil dikirim!`,
-          });
-          setTimeout(() => setTestResult(null), 4000);
-          fetchLogs();
-        }
-      } else {
-        setTestResult({
-          type: "error",
-          text: data.message || "Gagal mengirim test",
-        });
-        setTimeout(() => setTestResult(null), 4000);
-      }
-    } catch {
-      setTestResult({ type: "error", text: "Gagal mengirim test notifikasi." });
-      setTimeout(() => setTestResult(null), 4000);
-    } finally {
-      setTestingMinutesNotif(false);
-    }
-  };
 
   const statusConfig = {
     open: {
@@ -491,6 +583,38 @@ const WhatsApp = () => {
               </span>
             </div>
           </div>
+        </div>
+
+        {/* Test Mode Banner */}
+        <div className={`flex items-center justify-between px-5 py-3 rounded-xl mb-6 border ${
+          testMode
+            ? "bg-amber-50 border-amber-200 text-amber-800"
+            : "bg-emerald-50 border-emerald-200 text-emerald-800"
+        }`}>
+          <div className="flex items-center gap-3">
+            <span className="text-lg">{testMode ? "⚠️" : "✅"}</span>
+            <div>
+              <p className="font-extrabold text-sm">
+                {testMode ? "Test Mode Aktif" : "Produksi"}
+              </p>
+              <p className="text-xs font-medium opacity-80">
+                {testMode
+                  ? "Notifikasi terjadwal dijeda — hanya trigger manual yang aktif"
+                  : "Notifikasi berjalan otomatis sesuai jadwal"}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={toggleTestMode}
+            className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+              testMode ? "bg-amber-400" : "bg-emerald-400"
+            }`}
+            title={testMode ? "Matikan Test Mode" : "Aktifkan Test Mode"}
+          >
+            <span className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-md transition-transform duration-200 ${
+              testMode ? "translate-x-5" : "translate-x-0"
+            }`} />
+          </button>
         </div>
 
         <div className="flex flex-col lg:flex-row gap-8">
@@ -661,6 +785,13 @@ const WhatsApp = () => {
                             ></span>
                             <span className="text-xs font-extrabold text-slate-800 uppercase tracking-widest">
                               {log.type.replace(/_/g, " ")}
+                            </span>
+                            <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded border ${
+                              ["test_preview", "test_scheduled"].includes(log.type)
+                                ? "bg-amber-50 text-amber-700 border-amber-200"
+                                : "bg-blue-50 text-blue-700 border-blue-200"
+                            }`}>
+                              {["test_preview", "test_scheduled"].includes(log.type) ? "TEST" : "PROD"}
                             </span>
                           </div>
                           <span className="text-[11px] text-slate-400 font-bold bg-slate-100 px-2 py-0.5 rounded-md">
@@ -914,39 +1045,63 @@ const WhatsApp = () => {
 
               {/* Footer Actions */}
               <div className="px-8 py-6 bg-slate-50/80 border-t border-slate-200 mt-auto flex items-center justify-end gap-4 flex-wrap">
-                {/* Test with Minutes */}
+                {/* Scheduled test countdown */}
+                {scheduledTest && (
+                  <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 rounded-xl shadow-sm text-amber-800 text-sm font-bold">
+                    <Loader size={14} className="animate-spin text-amber-500" />
+                    <span>
+                      {new Date(scheduledTest.scheduledFor).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+                      {" "}({Math.floor(schedCountdown / 60)}m {schedCountdown % 60}s lagi)
+                    </span>
+                    <button onClick={cancelTest} className="ml-1 text-amber-500 hover:text-rose-600 transition-colors">
+                      <X size={14} strokeWidth={3} />
+                    </button>
+                  </div>
+                )}
+
+                {/* Test Preview */}
                 <div className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl shadow-sm">
-                  <span className="text-sm font-bold text-slate-600">
-                    Test:
-                  </span>
+                  <span className="text-sm font-bold text-slate-600">Preview:</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={9999}
+                    value={previewThreshold}
+                    onChange={(e) => setPreviewThreshold(parseInt(e.target.value) || 999)}
+                    className="w-16 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-center text-primary focus:outline-none focus:border-primary focus:ring-[3px] focus:ring-primary/20 transition-all shadow-inner"
+                  />
+                  <span className="text-sm font-bold text-slate-600">hari</span>
+                  <button
+                    onClick={testPreview}
+                    disabled={testingPreview || status !== "open"}
+                    className="ml-2 px-4 py-2 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-lg text-sm font-bold hover:bg-indigo-100 hover:border-indigo-300 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Kirim notifikasi sekarang menggunakan data sertifikasi asli"
+                  >
+                    {testingPreview ? <Loader size={16} className="animate-spin text-indigo-600" /> : <PlayCircle size={16} className="text-indigo-600" />}
+                    Kirim Preview
+                  </button>
+                </div>
+
+                {/* Schedule Test */}
+                <div className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl shadow-sm">
+                  <span className="text-sm font-bold text-slate-600">Jadwal:</span>
                   <input
                     type="number"
                     min={1}
                     max={60}
                     value={testMinutes}
-                    onChange={(e) =>
-                      setTestMinutes(parseInt(e.target.value) || 5)
-                    }
+                    onChange={(e) => setTestMinutes(parseInt(e.target.value) || 5)}
                     className="w-14 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-center text-primary focus:outline-none focus:border-primary focus:ring-[3px] focus:ring-primary/20 transition-all shadow-inner"
                   />
-                  <span className="text-sm font-bold text-slate-600">
-                    menit
-                  </span>
+                  <span className="text-sm font-bold text-slate-600">menit</span>
                   <button
-                    onClick={testNotificationWithMinutes}
-                    disabled={testingMinutesNotif || status !== "open"}
+                    onClick={scheduleTest}
+                    disabled={schedulingTest || status !== "open" || !!scheduledTest}
                     className="ml-2 px-4 py-2 bg-amber-50 border border-amber-200 text-amber-700 rounded-lg text-sm font-bold hover:bg-amber-100 hover:border-amber-300 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Test dengan data yang akan expired dalam X menit"
+                    title="Jadwalkan test untuk dijalankan dalam X menit"
                   >
-                    {testingMinutesNotif ? (
-                      <Loader
-                        size={16}
-                        className="animate-spin text-amber-600"
-                      />
-                    ) : (
-                      <PlayCircle size={16} className="text-amber-600" />
-                    )}
-                    Kirim Test
+                    {schedulingTest ? <Loader size={16} className="animate-spin text-amber-600" /> : <PlayCircle size={16} className="text-amber-600" />}
+                    Jadwalkan Test
                   </button>
                 </div>
 
@@ -955,11 +1110,7 @@ const WhatsApp = () => {
                   disabled={testingNotif || status !== "open"}
                   className="px-6 py-3 bg-white border border-slate-300 text-slate-700 rounded-xl text-sm font-bold hover:bg-slate-100 hover:text-slate-900 shadow-sm transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {testingNotif ? (
-                    <Loader size={18} className="animate-spin text-primary" />
-                  ) : (
-                    <PlayCircle size={18} className="text-emerald-500" />
-                  )}
+                  {testingNotif ? <Loader size={18} className="animate-spin text-primary" /> : <PlayCircle size={18} className="text-emerald-500" />}
                   Uji Notifikasi
                 </button>
                 {hasUnsavedChanges && (
