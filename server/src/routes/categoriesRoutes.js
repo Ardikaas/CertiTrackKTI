@@ -41,7 +41,7 @@ router.get(
   catchAsync(async (req, res) => {
     const categories = readCategories();
     res.status(200).json({ status: "success", data: categories });
-  })
+  }),
 );
 
 // POST /api/v1/categories
@@ -54,13 +54,16 @@ router.post(
     }
     const categories = readCategories();
     const trimmed = name.trim();
-    if (categories.includes(trimmed)) {
+    const isDuplicate = categories.some(
+      (c) => c.toLowerCase() === trimmed.toLowerCase(),
+    );
+    if (isDuplicate) {
       return next(new AppError("Kategori sudah ada", 400));
     }
     categories.push(trimmed);
     writeCategories(categories);
     res.status(201).json({ status: "success", data: categories });
-  })
+  }),
 );
 
 // DELETE /api/v1/categories/:name
@@ -76,7 +79,7 @@ router.delete(
     categories.splice(index, 1);
     writeCategories(categories);
     res.status(200).json({ status: "success", data: categories });
-  })
+  }),
 );
 
 module.exports = router;

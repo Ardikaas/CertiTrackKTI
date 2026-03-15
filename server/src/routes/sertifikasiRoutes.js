@@ -58,7 +58,7 @@ router.get(
   catchAsync(async (req, res) => {
     // Get all sertifikasi from MongoDB
     const sertifikasi = await Sertifikasi.find().sort({ tanggalExp: 1 });
-    
+
     res.status(200).json({
       status: "success",
       results: sertifikasi.length,
@@ -72,12 +72,14 @@ router.get(
   "/stats",
   catchAsync(async (req, res) => {
     const allSertifikasi = await Sertifikasi.find();
-    
+
     const total = allSertifikasi.length;
-    const expired = allSertifikasi.filter(s => s.status === "expired").length;
-    const expiringSoon = allSertifikasi.filter(s => s.status === "expiring_soon").length;
-    const active = allSertifikasi.filter(s => s.status === "active").length;
-    
+    const expired = allSertifikasi.filter((s) => s.status === "expired").length;
+    const expiringSoon = allSertifikasi.filter(
+      (s) => s.status === "expiring_soon",
+    ).length;
+    const active = allSertifikasi.filter((s) => s.status === "active").length;
+
     res.status(200).json({
       status: "success",
       data: {
@@ -96,15 +98,27 @@ router.post(
   uploadFields,
   catchAsync(async (req, res) => {
     const body = { ...req.body };
+    const uploadedFiles = [];
 
     if (req.files?.fotoEquipment?.[0]) {
       body.fotoEquipment = `/uploads/foto/${req.files.fotoEquipment[0].filename}`;
+      uploadedFiles.push(req.files.fotoEquipment[0].path);
     }
     if (req.files?.dokumenSertifikat?.[0]) {
       body.dokumenSertifikat = `/uploads/dokumen/${req.files.dokumenSertifikat[0].filename}`;
+      uploadedFiles.push(req.files.dokumenSertifikat[0].path);
     }
 
-    const sertifikasi = await Sertifikasi.create(body);
+    let sertifikasi;
+    try {
+      sertifikasi = await Sertifikasi.create(body);
+    } catch (err) {
+      // Cleanup uploaded files if DB save fails
+      uploadedFiles.forEach((filePath) => {
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      });
+      throw err; // Re-throw so catchAsync/errorHandler can handle it
+    }
 
     res.status(201).json({
       status: "success",
@@ -118,11 +132,11 @@ router.get(
   "/:id",
   catchAsync(async (req, res, next) => {
     const sertifikasi = await Sertifikasi.findById(req.params.id);
-    
+
     if (!sertifikasi) {
       return next(new AppError("Sertifikasi tidak ditemukan", 404));
     }
-    
+
     res.status(200).json({
       status: "success",
       data: sertifikasi,
@@ -137,22 +151,49 @@ router.put(
   catchAsync(async (req, res, next) => {
     const body = { ...req.body };
 
+    // Fetch existing record to get old file paths
+    const existing = await Sertifikasi.findById(req.params.id);
+    if (!existing) {
+      // Clean up any uploaded files before returning error
+      if (req.files?.fotoEquipment?.[0])
+        fs.unlinkSync(req.files.fotoEquipment[0].path);
+      if (req.files?.dokumenSertifikat?.[0])
+        fs.unlinkSync(req.files.dokumenSertifikat[0].path);
+      return next(new AppError("Sertifikasi tidak ditemukan", 404));
+    }
+
     if (req.files?.fotoEquipment?.[0]) {
+      // Delete old foto if it exists
+      if (existing.fotoEquipment) {
+        const oldPath = path.join(
+          __dirname,
+          "..",
+          "..",
+          existing.fotoEquipment,
+        );
+        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+      }
       body.fotoEquipment = `/uploads/foto/${req.files.fotoEquipment[0].filename}`;
     }
     if (req.files?.dokumenSertifikat?.[0]) {
+      // Delete old document if it exists
+      if (existing.dokumenSertifikat) {
+        const oldPath = path.join(
+          __dirname,
+          "..",
+          "..",
+          existing.dokumenSertifikat,
+        );
+        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+      }
       body.dokumenSertifikat = `/uploads/dokumen/${req.files.dokumenSertifikat[0].filename}`;
     }
 
     const sertifikasi = await Sertifikasi.findByIdAndUpdate(
       req.params.id,
       body,
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
-    
-    if (!sertifikasi) {
-      return next(new AppError("Sertifikasi tidak ditemukan", 404));
-    }
 
     res.status(200).json({
       status: "success",
@@ -166,18 +207,28 @@ router.delete(
   "/:id",
   catchAsync(async (req, res, next) => {
     const sertifikasi = await Sertifikasi.findById(req.params.id);
-    
+
     if (!sertifikasi) {
       return next(new AppError("Sertifikasi tidak ditemukan", 404));
     }
 
     // Clean up uploaded files
     if (sertifikasi.fotoEquipment) {
-      const fotoPath = path.join(__dirname, "..", "..", sertifikasi.fotoEquipment);
+      const fotoPath = path.join(
+        __dirname,
+        "..",
+        "..",
+        sertifikasi.fotoEquipment,
+      );
       if (fs.existsSync(fotoPath)) fs.unlinkSync(fotoPath);
     }
     if (sertifikasi.dokumenSertifikat) {
-      const docPath = path.join(__dirname, "..", "..", sertifikasi.dokumenSertifikat);
+      const docPath = path.join(
+        __dirname,
+        "..",
+        "..",
+        sertifikasi.dokumenSertifikat,
+      );
       if (fs.existsSync(docPath)) fs.unlinkSync(docPath);
     }
 

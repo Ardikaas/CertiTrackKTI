@@ -1,0 +1,128 @@
+name: CI/CD — CertiTrackKTI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────
+  # Job 1: Lint & Build check (runs on every push and every PR)
+  # ─────────────────────────────────────────────────────────────────
+  check:
+    name: Lint & Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: public/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: public
+
+      - name: Lint frontend
+        run: npm run lint
+        working-directory: public
+
+      - name: Build frontend
+        run: npm run build
+        working-directory: public
+
+  # ─────────────────────────────────────────────────────────────────
+  # Job 2: Deploy (only on push to main, after check passes)
+  # ─────────────────────────────────────────────────────────────────
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
+          TUNNEL_TOKEN: ${{ secrets.TUNNEL_TOKEN }}
+          CORS_ORIGINS: ${{ secrets.CORS_ORIGINS }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT != '' && secrets.VPS_PORT || '22' }}
+          envs: JWT_SECRET,MONGO_PASSWORD,TUNNEL_TOKEN,CORS_ORIGINS
+          command_timeout: 10m
+          script: |
+            set -e
+
+            echo "──────────────────────────────────────"
+            echo "  CertiTrackKTI — Deploying..."
+            echo "  Commit: ${{ github.sha }}"
+            echo "  Triggered by: ${{ github.actor }}"
+            echo "──────────────────────────────────────"
+
+            APP_DIR="/projects/certitrack"
+
+            # ── 1. Pull latest code ──────────────────
+            echo ""
+            echo "📦 Pulling latest code..."
+            cd "$APP_DIR"
+            git fetch origin main
+            git reset --hard origin/main
+
+            # ── 2. Write .env from GitHub Secrets ───
+            echo ""
+            echo "🔑 Writing .env..."
+            {
+              echo "JWT_SECRET=${JWT_SECRET}"
+              echo "MONGO_PASSWORD=${MONGO_PASSWORD}"
+              echo "TUNNEL_TOKEN=${TUNNEL_TOKEN}"
+              echo "CORS_ORIGINS=${CORS_ORIGINS}"
+            } > "$APP_DIR/.env"
+            chmod 600 "$APP_DIR/.env"
+
+            # ── 3. Rebuild & restart containers ─────
+            echo ""
+            echo "🐳 Building and starting containers..."
+            docker compose -f "$APP_DIR/docker-compose-prod.yml" \
+              up --build -d --remove-orphans
+
+            # ── 4. Clean up dangling images ─────────
+            echo ""
+            echo "🧹 Pruning old Docker images..."
+            docker image prune -f
+
+            # ── 5. Health check with retries ────────
+            echo ""
+            echo "🏥 Running health check..."
+            MAX_RETRIES=10
+            RETRY_DELAY=5
+            for i in $(seq 1 $MAX_RETRIES); do
+              if curl -sf http://localhost:5000/api/v1/health > /dev/null; then
+                echo ""
+                echo "✅ Deployment successful!"
+                echo "   Commit : ${{ github.sha }}"
+                echo "   By     : ${{ github.actor }}"
+                exit 0
+              fi
+              echo "   Attempt $i/$MAX_RETRIES — waiting ${RETRY_DELAY}s..."
+              sleep $RETRY_DELAY
+            done
+
+            echo "❌ Health check failed after $MAX_RETRIES attempts."
+            echo "   Container logs:"
+            docker compose -f "$APP_DIR/docker-compose-prod.yml" logs --tail=50 backend
+            exit 1

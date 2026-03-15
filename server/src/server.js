@@ -1,4 +1,11 @@
 require("dotenv").config();
+
+if (!process.env.JWT_SECRET) {
+  console.warn(
+    "⚠️  WARNING: JWT_SECRET is not set in .env — using insecure default. Set JWT_SECRET in production!",
+  );
+}
+
 const app = require("./app");
 const connectDB = require("./config/db");
 const { startScheduler } = require("./services/notificationScheduler");

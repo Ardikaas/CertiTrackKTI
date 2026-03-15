@@ -73,6 +73,9 @@ typings/
 .env
 .env.test
 .env.production
+# Keep example files tracked in git
+!.env.example
+!**/.env.example
 .env.local
 .env.development.local
 .env.test.local

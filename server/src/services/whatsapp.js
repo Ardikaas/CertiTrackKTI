@@ -28,9 +28,15 @@ const baileysLogger = pino({ level: "silent" });
 const initWhatsApp = async () => {
   // Prevent re-initialization if already connected or connecting
   if (connectionStatus === "open" || connectionStatus === "connecting") {
-    logger.info("WhatsApp already initialized or connecting", { connectionStatus });
+    logger.info("WhatsApp already initialized or connecting", {
+      connectionStatus,
+    });
     return;
   }
+
+  // Set IMMEDIATELY to prevent race condition where multiple concurrent
+  // calls slip past the guard before the first QR event fires
+  connectionStatus = "connecting";
 
   try {
     logger.info("WhatsApp service initializing...");
@@ -90,12 +96,16 @@ const initWhatsApp = async () => {
         const statusCode = lastDisconnect?.error?.output?.statusCode;
         const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
-        logger.warn(`Connection closed (code: ${statusCode}). Reconnect: ${shouldReconnect}`);
+        logger.warn(
+          `Connection closed (code: ${statusCode}). Reconnect: ${shouldReconnect}`,
+        );
 
         if (shouldReconnect && retryCount < MAX_RETRIES) {
           retryCount++;
           const delay = Math.min(retryCount * 3000, 15000);
-          logger.info(`Reconnecting in ${delay / 1000}s (attempt ${retryCount}/${MAX_RETRIES})...`);
+          logger.info(
+            `Reconnecting in ${delay / 1000}s (attempt ${retryCount}/${MAX_RETRIES})...`,
+          );
           setTimeout(() => initWhatsApp(), delay);
         } else if (!shouldReconnect) {
           if (fs.existsSync(AUTH_DIR)) {

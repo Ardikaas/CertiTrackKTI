@@ -2,34 +2,58 @@ networks:
   certitrack-network:
     driver: bridge
 
+volumes:
+  mongo-data:
+  backend-data:
+  backend-uploads:
+
 services:
   mongodb:
     image: mongo:7
     container_name: certitrack-mongodb
     restart: unless-stopped
-    # Removed port mapping - accessible only within Docker network
     environment:
       - MONGO_INITDB_ROOT_USERNAME=admin
-      - MONGO_INITDB_ROOT_PASSWORD=admin123
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD:-admin123}
       - MONGO_INITDB_DATABASE=certitrack
     volumes:
       - mongo-data:/data/db
     networks:
       - certitrack-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    container_name: cloudflared-certitrack
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: certitrack-backend
     restart: unless-stopped
-    command: tunnel run
+    ports:
+      # Bind to localhost only — Cloudflare Tunnel / nginx is the public entry point
+      - "127.0.0.1:5000:5000"
     environment:
-      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+      - NODE_ENV=production
+      - PORT=5000
+      - MONGO_URI=mongodb://admin:${MONGO_PASSWORD:-admin123}@mongodb:27017/certitrack?authSource=admin
+      - JWT_SECRET=${JWT_SECRET}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    volumes:
+      - backend-data:/app/data
+      - backend-uploads:/app/uploads
     networks:
       - certitrack-network
 
   frontend:
     build:
-      context: ~/opencode-setup/opencode/data/workspace/CertiTrackKTI/public
+      context: ./public
       dockerfile: Dockerfile
     container_name: certitrack-frontend
     restart: unless-stopped
@@ -40,28 +64,14 @@ services:
     networks:
       - certitrack-network
 
-  backend:
-    build:
-      context: ~/opencode-setup/opencode/data/workspace/CertiTrackKTI/server
-      dockerfile: Dockerfile
-    container_name: certitrack-backend
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared-certitrack
     restart: unless-stopped
-    ports:
-      - "5000:5000"
+    command: tunnel run
     environment:
-      - NODE_ENV=production
-      - PORT=5000
-      - MONGO_URI=mongodb://admin:admin123@mongodb:27017/certitrack?authSource=admin
-      - JWT_SECRET=${JWT_SECRET:-certitrack_secret_default}
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
     depends_on:
-      - mongodb
-    volumes:
-      - backend-data:/app/data
-      - backend-uploads:/app/uploads
+      - frontend
     networks:
       - certitrack-network
-
-volumes:
-  backend-data:
-  backend-uploads:
-  mongo-data:

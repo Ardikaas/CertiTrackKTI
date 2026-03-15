@@ -3,7 +3,10 @@ const router = express.Router();
 const path = require("path");
 const fs = require("fs");
 const catchAsync = require("../utils/catchAsync");
-const { sendNotifications } = require("../services/notificationScheduler");
+const {
+  sendNotifications,
+  restartScheduler,
+} = require("../services/notificationScheduler");
 
 // JSON file paths for storage (no database needed)
 const DATA_DIR = path.join(__dirname, "..", "..", "data");
@@ -37,6 +40,17 @@ const writeJSON = (filePath, data) => {
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf8");
 };
 
+const addLog = (log) => {
+  const logs = readJSON(LOGS_FILE, []);
+  logs.push({
+    ...log,
+    _id: Date.now().toString(),
+    createdAt: new Date().toISOString(),
+  });
+  if (logs.length > 200) logs.splice(0, logs.length - 200);
+  writeJSON(LOGS_FILE, logs);
+};
+
 // GET /api/v1/notifications/settings
 router.get(
   "/settings",
@@ -64,6 +78,11 @@ router.put(
 
     writeJSON(SETTINGS_FILE, settings);
 
+    // Restart scheduler if schedule time changed
+    if (req.body.scheduleTime !== undefined) {
+      restartScheduler();
+    }
+
     res.status(200).json({
       status: "success",
       data: settings,
@@ -90,23 +109,28 @@ router.post(
   catchAsync(async (req, res) => {
     const { minutes } = req.body;
     const minutesVal = parseInt(minutes) || 5;
-    
+
     // Get current settings
     const settings = readJSON(SETTINGS_FILE, DEFAULT_SETTINGS);
-    
+
     // Check WhatsApp connection
     const { getStatus } = require("../services/whatsapp");
     if (getStatus() !== "open") {
       return res.status(200).json({
         status: "success",
-        data: { error: "WhatsApp belum terhubung. Hubungkan dulu via QR code." },
+        data: {
+          error: "WhatsApp belum terhubung. Hubungkan dulu via QR code.",
+        },
       });
     }
 
     if (settings.recipients.length === 0) {
       return res.status(200).json({
         status: "success",
-        data: { error: "Belum ada nomor penerima. Tambahkan di Pengaturan Notifikasi." },
+        data: {
+          error:
+            "Belum ada nomor penerima. Tambahkan di Pengaturan Notifikasi.",
+        },
       });
     }
 
@@ -132,25 +156,25 @@ router.post(
     // Send to all recipients
     const { sendMessage } = require("../services/whatsapp");
     const results = [];
-    
+
     for (const phone of settings.recipients) {
       try {
         await sendMessage(phone, msg);
-        addLog({ 
-          type: "test_expiring_minutes", 
-          recipient: phone, 
-          message: msg, 
+        addLog({
+          type: "test_expiring_minutes",
+          recipient: phone,
+          message: msg,
           status: "sent",
-          metadata: { minutes: minutesVal }
+          metadata: { minutes: minutesVal },
         });
         results.push({ phone, status: "sent" });
       } catch (error) {
-        addLog({ 
-          type: "test_expiring_minutes", 
-          recipient: phone, 
-          message: msg, 
-          status: "failed", 
-          error: error.message 
+        addLog({
+          type: "test_expiring_minutes",
+          recipient: phone,
+          message: msg,
+          status: "failed",
+          error: error.message,
         });
         results.push({ phone, status: "failed", error: error.message });
       }
@@ -159,11 +183,13 @@ router.post(
     res.status(200).json({
       status: "success",
       data: {
-        sent: [{
-          type: "test_expiring_minutes",
-          count: 1,
-          results: results,
-        }],
+        sent: [
+          {
+            type: "test_expiring_minutes",
+            count: 1,
+            results: results,
+          },
+        ],
         skipped: [],
         testCert: testCert,
       },
@@ -190,16 +216,6 @@ router.get(
 
 // Export helpers for scheduler to use
 router.readSettings = () => readJSON(SETTINGS_FILE, DEFAULT_SETTINGS);
-router.addLog = (log) => {
-  const logs = readJSON(LOGS_FILE, []);
-  logs.push({
-    ...log,
-    _id: Date.now().toString(),
-    createdAt: new Date().toISOString(),
-  });
-  // Keep max 200 logs
-  if (logs.length > 200) logs.splice(0, logs.length - 200);
-  writeJSON(LOGS_FILE, logs);
-};
+router.addLog = addLog;
 
 module.exports = router;

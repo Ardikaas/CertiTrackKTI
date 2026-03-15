@@ -16,7 +16,11 @@ const limiter = rateLimit({
   max: process.env.NODE_ENV === "development" ? 3000 : 1000, // 1000 req/15min for production, 3000 for dev
   standardHeaders: true,
   legacyHeaders: false,
-  message: { status: "error", message: "Terlalu banyak request dari IP ini, silakan coba lagi dalam 15 menit." },
+  message: {
+    status: "error",
+    message:
+      "Terlalu banyak request dari IP ini, silakan coba lagi dalam 15 menit.",
+  },
   handler: (req, res, next, options) => {
     logger.warn("Rate limit exceeded", {
       ip: req.ip,
@@ -28,7 +32,23 @@ const limiter = rateLimit({
 });
 
 // Middlewares
-app.use(cors()); // Enable CORS
+const allowedOrigins = (process.env.CORS_ORIGINS || "http://localhost:5173")
+  .split(",")
+  .map((o) => o.trim());
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, curl, Postman, same-origin)
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS policy: origin ${origin} not allowed`));
+      }
+    },
+    credentials: true,
+  }),
+); // Enable CORS
 app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } })); // Set security HTTP headers
 app.use(requestLogger); // Custom request logging
 app.use("/api", limiter); // Apply rate limiter to /api

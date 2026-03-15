@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { apiFetch } from "../utils/api";
 import {
   Wifi,
@@ -92,6 +92,18 @@ const WhatsApp = () => {
   // Notification logs
   const [logs, setLogs] = useState([]);
 
+  // Unsaved changes tracking
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  // QR code expiry countdown
+  const [qrCountdown, setQrCountdown] = useState(20);
+
+  // Ref to track status inside intervals without causing re-renders
+  const statusRef = useRef("disconnected");
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
   // Fetch WhatsApp status
   const fetchStatus = useCallback(async () => {
     try {
@@ -143,31 +155,88 @@ const WhatsApp = () => {
     }
   }, []);
 
-  // Initialize WhatsApp on page mount, then poll status/QR every 3 seconds
+  // On mount: check current status first, only init if truly disconnected
   useEffect(() => {
-    // Initialize WhatsApp service when page loads
-    const initService = async () => {
+    let cancelled = false;
+
+    const bootstrap = async () => {
+      // 1. Check what the server thinks the status is right now
       try {
-        await apiFetch(`${WA_API}/init`, { method: "POST" });
-        setStatus("connecting");
-        setQrMessage("Memulai layanan WhatsApp...");
-      } catch (err) {
-        console.error("Failed to initialize WhatsApp:", err);
+        const res = await apiFetch(`${WA_API}/status`);
+        const data = await res.json();
+        const currentStatus = data.data?.connectionStatus ?? "disconnected";
+        if (!cancelled) setStatus(currentStatus);
+
+        // 2. Only POST /init when disconnected — never re-init an already
+        //    connecting or open socket (that caused the QR-spam burst)
+        if (currentStatus === "disconnected" && !cancelled) {
+          try {
+            await apiFetch(`${WA_API}/init`, { method: "POST" });
+            if (!cancelled) {
+              setStatus("connecting");
+              setQrMessage("Memulai layanan WhatsApp...");
+            }
+          } catch (err) {
+            console.error("Failed to initialize WhatsApp:", err);
+          }
+        }
+      } catch {
+        if (!cancelled) setStatus("disconnected");
+      }
+
+      // 3. Load settings and logs once
+      if (!cancelled) {
+        fetchSettings();
+        fetchLogs();
       }
     };
 
-    initService();
-    fetchSettings();
-    fetchLogs();
+    bootstrap();
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchSettings, fetchLogs]); // stable useCallback refs — won't re-run
 
-    // Poll for status and QR code
+  // Stable polling interval — status lives in a ref so this effect
+  // never needs to restart when status changes (no more re-init loops)
+  useEffect(() => {
     const interval = setInterval(() => {
       fetchStatus();
-      if (status !== "open") fetchQR();
+      if (statusRef.current !== "open") fetchQR();
     }, 3000);
-
     return () => clearInterval(interval);
-  }, [fetchStatus, fetchQR, fetchSettings, fetchLogs, status]);
+  }, [fetchStatus, fetchQR]); // stable useCallback refs
+
+  // Warn user before navigating away with unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [hasUnsavedChanges]);
+
+  // QR code expiry countdown (20s)
+  useEffect(() => {
+    if (!qrCode) {
+      setQrCountdown(20);
+      return;
+    }
+    setQrCountdown(20);
+    const timer = setInterval(() => {
+      setQrCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [qrCode]);
 
   // Logout
   const handleLogout = async () => {
@@ -204,6 +273,7 @@ const WhatsApp = () => {
     if (settings.recipients.includes(cleaned)) return;
     setSettings({ ...settings, recipients: [...settings.recipients, cleaned] });
     setNewRecipient("");
+    setHasUnsavedChanges(true);
   };
 
   // Remove recipient
@@ -213,6 +283,7 @@ const WhatsApp = () => {
       ...settings,
       recipients: settings.recipients.filter((r) => r !== phone),
     });
+    setHasUnsavedChanges(true);
   };
 
   // Toggle notification type
@@ -225,6 +296,7 @@ const WhatsApp = () => {
         [key]: !settings.enabledTypes[key],
       },
     });
+    setHasUnsavedChanges(true);
   };
 
   // Save settings
@@ -239,6 +311,7 @@ const WhatsApp = () => {
       const data = await res.json();
       if (data.status === "success") {
         setSettings(data.data);
+        setHasUnsavedChanges(false);
         setSettingsResult({
           type: "success",
           text: "Pengaturan berhasil disimpan!",
@@ -481,6 +554,13 @@ const WhatsApp = () => {
                         alt="WhatsApp QR Code"
                         className="w-[260px] h-[260px]"
                       />
+                    </div>
+                    <div
+                      className={`text-xs font-bold text-center mt-2 ${qrCountdown <= 5 ? "text-rose-500" : "text-slate-400"}`}
+                    >
+                      {qrCountdown > 0
+                        ? `Kode kedaluwarsa dalam ${qrCountdown}s`
+                        : "⟳ Kode kedaluwarsa, menunggu kode baru..."}
                     </div>
                     <h3 className="text-xl font-extrabold text-slate-900 mb-2">
                       Scan QR Code
@@ -836,16 +916,22 @@ const WhatsApp = () => {
               <div className="px-8 py-6 bg-slate-50/80 border-t border-slate-200 mt-auto flex items-center justify-end gap-4 flex-wrap">
                 {/* Test with Minutes */}
                 <div className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl shadow-sm">
-                  <span className="text-sm font-bold text-slate-600">Test:</span>
+                  <span className="text-sm font-bold text-slate-600">
+                    Test:
+                  </span>
                   <input
                     type="number"
                     min={1}
                     max={60}
                     value={testMinutes}
-                    onChange={(e) => setTestMinutes(parseInt(e.target.value) || 5)}
+                    onChange={(e) =>
+                      setTestMinutes(parseInt(e.target.value) || 5)
+                    }
                     className="w-14 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-center text-primary focus:outline-none focus:border-primary focus:ring-[3px] focus:ring-primary/20 transition-all shadow-inner"
                   />
-                  <span className="text-sm font-bold text-slate-600">menit</span>
+                  <span className="text-sm font-bold text-slate-600">
+                    menit
+                  </span>
                   <button
                     onClick={testNotificationWithMinutes}
                     disabled={testingMinutesNotif || status !== "open"}
@@ -853,7 +939,10 @@ const WhatsApp = () => {
                     title="Test dengan data yang akan expired dalam X menit"
                   >
                     {testingMinutesNotif ? (
-                      <Loader size={16} className="animate-spin text-amber-600" />
+                      <Loader
+                        size={16}
+                        className="animate-spin text-amber-600"
+                      />
                     ) : (
                       <PlayCircle size={16} className="text-amber-600" />
                     )}
@@ -873,6 +962,12 @@ const WhatsApp = () => {
                   )}
                   Uji Notifikasi
                 </button>
+                {hasUnsavedChanges && (
+                  <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm font-semibold">
+                    <span>⚠️</span>
+                    <span>Ada perubahan yang belum disimpan.</span>
+                  </div>
+                )}
                 <button
                   onClick={saveSettings}
                   disabled={savingSettings}

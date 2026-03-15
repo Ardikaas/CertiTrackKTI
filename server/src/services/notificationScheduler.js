@@ -2,6 +2,7 @@ const cron = require("node-cron");
 const path = require("path");
 const fs = require("fs");
 const { sendMessage, getStatus } = require("./whatsapp");
+const Sertifikasi = require("../models/Sertifikasi");
 
 // JSON file paths (shared with notificationRoutes.js)
 const DATA_DIR = path.join(__dirname, "..", "..", "data");
@@ -56,27 +57,22 @@ const formatDate = (date) => {
   });
 };
 
-const SERTIFIKASI_FILE = path.join(DATA_DIR, "sertifikasi.json");
-
 /**
- * Get sertifikasi data from JSON file
+ * Get sertifikasi data from MongoDB
  */
-const getSertifikasiData = () => {
+const getSertifikasiData = async () => {
   try {
-    if (fs.existsSync(SERTIFIKASI_FILE)) {
-      const data = JSON.parse(fs.readFileSync(SERTIFIKASI_FILE, "utf8"));
-      // Compute sisaHari for each record
-      return data.map((cert) => ({
-        ...cert,
-        sisaHari: Math.ceil(
-          (new Date(cert.tanggalExp) - new Date()) / (1000 * 60 * 60 * 24),
-        ),
-      }));
-    }
+    const certs = await Sertifikasi.find();
+    return certs.map((cert) => ({
+      ...cert.toObject(),
+      sisaHari: Math.ceil(
+        (new Date(cert.tanggalExp) - new Date()) / (1000 * 60 * 60 * 24),
+      ),
+    }));
   } catch (err) {
-    console.error("Error reading sertifikasi data:", err.message);
+    console.error("Error fetching sertifikasi from DB:", err.message);
+    return [];
   }
-  return [];
 };
 
 const buildExpiringSoonMessage = (certs, days) => {
@@ -305,12 +301,21 @@ const sendNotifications = async (type = "all", isTest = false) => {
   return results;
 };
 
+// Store cron task references so we can stop them on restart
+let dailyTask = null;
+let weeklyTask = null;
+
 /**
  * Start the cron scheduler
  */
 const startScheduler = () => {
-  // Daily check at 08:00
-  cron.schedule("0 8 * * *", async () => {
+  const settings = getSettings();
+  const [hour, minute] = (settings.scheduleTime || "08:00").split(":");
+  const dailyCron = `${parseInt(minute)} ${parseInt(hour)} * * *`;
+  const weeklyCron = `${parseInt(minute)} ${parseInt(hour)} * * 1`;
+
+  // Daily check
+  dailyTask = cron.schedule(dailyCron, async () => {
     console.log("⏰ Running daily notification check...");
     try {
       const result = await sendNotifications("expiring_soon");
@@ -326,8 +331,8 @@ const startScheduler = () => {
     }
   });
 
-  // Weekly check — every Monday at 08:00
-  cron.schedule("0 8 * * 1", async () => {
+  // Weekly check — every Monday
+  weeklyTask = cron.schedule(weeklyCron, async () => {
     console.log("⏰ Running weekly notification check...");
     try {
       const result = await sendNotifications("weekly_check");
@@ -338,11 +343,23 @@ const startScheduler = () => {
   });
 
   console.log(
-    "📅 Notification scheduler started (daily 08:00, weekly Mon 08:00)",
+    `📅 Notification scheduler started (daily ${hour}:${minute.padStart(2, "0")}, weekly Mon ${hour}:${minute.padStart(2, "0")})`,
   );
+};
+
+/**
+ * Stop existing tasks and restart the scheduler (used when settings change)
+ */
+const restartScheduler = () => {
+  if (dailyTask) dailyTask.stop();
+  if (weeklyTask) weeklyTask.stop();
+  dailyTask = null;
+  weeklyTask = null;
+  startScheduler();
 };
 
 module.exports = {
   sendNotifications,
   startScheduler,
+  restartScheduler,
 };
