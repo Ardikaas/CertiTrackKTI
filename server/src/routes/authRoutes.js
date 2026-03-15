@@ -44,8 +44,7 @@ const writeUsers = (users) => {
 };
 
 const signToken = (user) => {
-  const secret = process.env.JWT_SECRET || "certitrack_secret_key_2024";
-  return jwt.sign({ id: user._id, username: user.username, role: user.role }, secret, {
+  return jwt.sign({ id: user._id, username: user.username, role: user.role }, process.env.JWT_SECRET, {
     expiresIn: "7d",
   });
 };
@@ -136,9 +135,8 @@ router.get(
       return next(new AppError("Token tidak ditemukan", 401));
     }
     const token = authHeader.split(" ")[1];
-    const secret = process.env.JWT_SECRET || "certitrack_secret_key_2024";
     try {
-      const decoded = jwt.verify(token, secret);
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
       const users = readUsers();
       const user = users.find((u) => u._id === decoded.id);
       if (!user) return next(new AppError("User tidak ditemukan", 401));

@@ -1,9 +1,8 @@
 require("dotenv").config();
 
 if (!process.env.JWT_SECRET) {
-  console.warn(
-    "⚠️  WARNING: JWT_SECRET is not set in .env — using insecure default. Set JWT_SECRET in production!",
-  );
+  console.error("❌ JWT_SECRET must be set in .env — refusing to start");
+  process.exit(1);
 }
 
 const app = require("./app");

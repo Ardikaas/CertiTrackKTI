@@ -18,10 +18,21 @@ const getSettings = async () => {
  * Validates and saves a partial settings update. Returns updated document.
  * Accepts: { recipients, expiringDays, enabledTypes, scheduleTime, testMode }
  */
+const PHONE_RE = /^(\+?62|0)\d{8,13}$/;
+
 const saveSettings = async (data) => {
   const update = {};
 
-  if (data.recipients !== undefined)   update.recipients   = data.recipients;
+  if (data.recipients !== undefined) {
+    const invalid = data.recipients.filter((r) => !PHONE_RE.test(r.replace(/[\s\-()]/g, "")));
+    if (invalid.length > 0) {
+      throw new AppError(
+        `Nomor tidak valid: ${invalid.join(", ")}. Gunakan format 08xxx, 628xxx, atau +628xxx`,
+        400,
+      );
+    }
+    update.recipients = data.recipients;
+  }
   if (data.expiringDays !== undefined) update.expiringDays = data.expiringDays;
   if (data.testMode !== undefined)     update.testMode     = data.testMode;
 

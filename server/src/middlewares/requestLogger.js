@@ -4,22 +4,25 @@ const logger = require("../utils/logger");
  * Request logging middleware
  * Logs all incoming requests with timing information
  */
+// High-frequency polling endpoints — skip logging 304s to avoid log spam
+const POLLING_PATHS = ["/api/v1/whatsapp/qr", "/api/v1/whatsapp/status"];
+
 const requestLogger = (req, res, next) => {
   const start = Date.now();
 
-  // Store original end function
   const originalEnd = res.end;
 
-  // Override end function to capture response time
   res.end = function (chunk, encoding) {
-    // Restore original end function
     res.end = originalEnd;
     res.end(chunk, encoding);
 
-    // Calculate duration
     const duration = Date.now() - start;
 
-    // Log the request
+    // Skip 304 responses from polling endpoints — they're just noise
+    if (req.method === "GET" && POLLING_PATHS.includes(req.path) && res.statusCode === 304) {
+      return;
+    }
+
     logger.request(req, res, duration);
   };
 

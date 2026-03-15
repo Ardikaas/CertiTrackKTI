@@ -103,7 +103,7 @@ router.get(
 router.get(
   "/log",
   catchAsync(async (req, res) => {
-    const limit = parseInt(req.query.limit, 10) || 50;
+    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
     const logs = await getLogs(limit);
     res.status(200).json({ status: "success", results: logs.length, data: logs });
   }),

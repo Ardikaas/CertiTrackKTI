@@ -278,9 +278,17 @@ const startScheduler = async () => {
   }
 
   const settings = await getSettings();
-  const [hour, minute] = (settings.scheduleTime || "08:00").split(":");
-  const dailyCron  = `${parseInt(minute)} ${parseInt(hour)} * * *`;
-  const weeklyCron = `${parseInt(minute)} ${parseInt(hour)} * * 1`;
+  const rawTime = settings.scheduleTime || "08:00";
+  const [rawHour, rawMinute] = rawTime.split(":");
+  const h = parseInt(rawHour, 10);
+  const m = parseInt(rawMinute, 10);
+  const hour   = (!isNaN(h) && h >= 0 && h <= 23) ? h : 8;
+  const minute = (!isNaN(m) && m >= 0 && m <= 59) ? m : 0;
+  if (isNaN(h) || isNaN(m)) {
+    console.warn(`⚠️  Invalid scheduleTime "${rawTime}" in DB — falling back to 08:00`);
+  }
+  const dailyCron  = `${minute} ${hour} * * *`;
+  const weeklyCron = `${minute} ${hour} * * 1`;
 
   dailyTask = cron.schedule(dailyCron, async () => {
     const current = await getSettings();
@@ -303,7 +311,7 @@ const startScheduler = async () => {
     try { await sendNotifications("weekly_check"); } catch (err) { console.error("❌ Weekly notification failed:", err.message); }
   });
 
-  console.log(`📅 Notification scheduler started (daily ${hour}:${minute.padStart(2, "0")}, weekly Mon)`);
+  console.log(`📅 Notification scheduler started (daily ${hour}:${String(minute).padStart(2, "0")}, weekly Mon)`);
 };
 
 /**

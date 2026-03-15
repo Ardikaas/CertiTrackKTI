@@ -84,7 +84,6 @@ const WhatsApp = () => {
   const [newRecipient, setNewRecipient] = useState("");
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsResult, setSettingsResult] = useState(null);
-  const [testingNotif, setTestingNotif] = useState(false);
   const [testResult, setTestResult] = useState(null);
   const [testMinutes, setTestMinutes] = useState(5);
 
@@ -229,7 +228,7 @@ const WhatsApp = () => {
     const interval = setInterval(() => {
       fetchStatus();
       if (statusRef.current !== "open") fetchQR();
-    }, 3000);
+    }, 5000);
     return () => clearInterval(interval);
   }, [fetchStatus, fetchQR]); // stable useCallback refs
 
@@ -459,42 +458,6 @@ const WhatsApp = () => {
     setSchedCountdown(0);
   };
 
-  // Test notification
-  const testNotification = async () => {
-    setTestingNotif(true);
-    setTestResult(null);
-    try {
-      const res = await apiFetch(`${NOTIF_API}/test`, {
-        method: "POST",
-        body: JSON.stringify({ type: "all" }),
-      });
-      const data = await res.json();
-      if (data.status === "success") {
-        if (data.data.error) {
-          setTestResult({ type: "error", text: data.data.error });
-          setTimeout(() => setTestResult(null), 4000);
-        } else {
-          setTestResult({
-            type: "success",
-            text: "Test notifikasi berhasil dikirim!",
-          });
-          setTimeout(() => setTestResult(null), 4000);
-          fetchLogs();
-        }
-      } else {
-        setTestResult({
-          type: "error",
-          text: data.message || "Gagal mengirim test",
-        });
-        setTimeout(() => setTestResult(null), 4000);
-      }
-    } catch {
-      setTestResult({ type: "error", text: "Gagal mengirim test notifikasi." });
-      setTimeout(() => setTestResult(null), 4000);
-    } finally {
-      setTestingNotif(false);
-    }
-  };
 
   // Test notification with minutes (for testing expiration logic quickly)
 
@@ -795,10 +758,8 @@ const WhatsApp = () => {
                             </span>
                           </div>
                           <span className="text-[11px] text-slate-400 font-bold bg-slate-100 px-2 py-0.5 rounded-md">
-                            {new Date(log.createdAt).toLocaleTimeString(
-                              "id-ID",
-                              { hour: "2-digit", minute: "2-digit" },
-                            )}
+                            {new Date(log.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" })},{" "}
+                            {new Date(log.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
                           </span>
                         </div>
                         <div className="flex items-center justify-between pl-4.5 bg-slate-50/50 rounded-lg p-2 border border-slate-100 mt-2">
@@ -1105,14 +1066,6 @@ const WhatsApp = () => {
                   </button>
                 </div>
 
-                <button
-                  onClick={testNotification}
-                  disabled={testingNotif || status !== "open"}
-                  className="px-6 py-3 bg-white border border-slate-300 text-slate-700 rounded-xl text-sm font-bold hover:bg-slate-100 hover:text-slate-900 shadow-sm transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {testingNotif ? <Loader size={18} className="animate-spin text-primary" /> : <PlayCircle size={18} className="text-emerald-500" />}
-                  Uji Notifikasi
-                </button>
                 {hasUnsavedChanges && (
                   <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm font-semibold">
                     <span>⚠️</span>
