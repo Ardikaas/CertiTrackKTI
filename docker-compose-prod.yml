@@ -6,6 +6,7 @@ volumes:
   mongo-data:
   backend-data:
   backend-uploads:
+  whatsapp-session:
 
 services:
   mongodb:
@@ -42,12 +43,14 @@ services:
       - MONGO_URI=mongodb://admin:${MONGO_PASSWORD:-admin123}@mongodb:27017/certitrack?authSource=admin
       - JWT_SECRET=${JWT_SECRET}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost}
+      - TZ=Asia/Jakarta
     depends_on:
       mongodb:
         condition: service_healthy
     volumes:
       - backend-data:/app/data
       - backend-uploads:/app/uploads
+      - whatsapp-session:/app/auth_info_baileys
     networks:
       - certitrack-network
 

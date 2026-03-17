@@ -4,6 +4,7 @@ networks:
 
 volumes:
   mongo-data:
+  whatsapp-session:
 
 services:
   mongodb:
@@ -47,7 +48,10 @@ services:
       - PORT=5000
       - MONGO_URI=mongodb://admin:admin123@mongodb:27017/certitrack?authSource=admin
       - JWT_SECRET=${JWT_SECRET}
+      - TZ=Asia/Jakarta
     depends_on:
       - mongodb
+    volumes:
+      - whatsapp-session:/app/auth_info_baileys
     networks:
       - certitrack-network
