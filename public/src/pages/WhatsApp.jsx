@@ -313,24 +313,54 @@ const WhatsApp = () => {
     }
   };
 
-  // Add recipient
-  const addRecipient = () => {
+  // Add recipient — auto-saves immediately so numbers survive navigation
+  const addRecipient = async () => {
     if (!newRecipient || !settings) return;
     const cleaned = newRecipient.replace(/[\s\-+()]/g, "");
     if (settings.recipients.includes(cleaned)) return;
-    setSettings({ ...settings, recipients: [...settings.recipients, cleaned] });
+    const newRecipients = [...settings.recipients, cleaned];
+    setSettings({ ...settings, recipients: newRecipients });
     setNewRecipient("");
-    setHasUnsavedChanges(true);
+    try {
+      const res = await apiFetch(`${NOTIF_API}/settings`, {
+        method: "PUT",
+        body: JSON.stringify({ recipients: newRecipients }),
+      });
+      const data = await res.json();
+      if (data.status !== "success") {
+        // Revert local state if save failed
+        setSettings((prev) => ({ ...prev, recipients: settings.recipients }));
+        setSettingsResult({ type: "error", text: data.message || "Gagal menyimpan nomor." });
+        setTimeout(() => setSettingsResult(null), 4000);
+      }
+    } catch {
+      setSettings((prev) => ({ ...prev, recipients: settings.recipients }));
+      setSettingsResult({ type: "error", text: "Gagal menyimpan nomor." });
+      setTimeout(() => setSettingsResult(null), 4000);
+    }
   };
 
-  // Remove recipient
-  const removeRecipient = (phone) => {
+  // Remove recipient — auto-saves immediately
+  const removeRecipient = async (phone) => {
     if (!settings) return;
-    setSettings({
-      ...settings,
-      recipients: settings.recipients.filter((r) => r !== phone),
-    });
-    setHasUnsavedChanges(true);
+    const newRecipients = settings.recipients.filter((r) => r !== phone);
+    setSettings({ ...settings, recipients: newRecipients });
+    try {
+      const res = await apiFetch(`${NOTIF_API}/settings`, {
+        method: "PUT",
+        body: JSON.stringify({ recipients: newRecipients }),
+      });
+      const data = await res.json();
+      if (data.status !== "success") {
+        setSettings((prev) => ({ ...prev, recipients: settings.recipients }));
+        setSettingsResult({ type: "error", text: "Gagal menghapus nomor." });
+        setTimeout(() => setSettingsResult(null), 4000);
+      }
+    } catch {
+      setSettings((prev) => ({ ...prev, recipients: settings.recipients }));
+      setSettingsResult({ type: "error", text: "Gagal menghapus nomor." });
+      setTimeout(() => setSettingsResult(null), 4000);
+    }
   };
 
   // Toggle notification type
